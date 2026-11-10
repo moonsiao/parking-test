@@ -17,7 +17,7 @@ section.on{display:block}
 .big{font-size:44px;font-weight:700;text-align:center;margin:6px 0}
 .muted{color:#777;font-size:13px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.cols{display:flex;gap:10px;justify-content:center}.col{display:flex;flex-direction:column;gap:6px;align-items:center}.col .h{font-size:12px;color:#777}.spot{width:58px;padding:10px 0;border:2px solid #1d2b53;border-radius:6px;background:#fff;font-weight:700;font-size:15px}.spot.sel{background:#0a7d32;border-color:#0a7d32;color:#fff}
+.cols{display:flex;gap:10px;justify-content:center;align-items:flex-end}.col{display:flex;flex-direction:column;gap:6px;align-items:center}.col .h{font-size:12px;color:#777}.spot{width:58px;padding:10px 0;border:2px solid #1d2b53;border-radius:6px;background:#fff;font-weight:700;font-size:15px}.spot.sel{background:#0a7d32;border-color:#0a7d32;color:#fff}
 .zbtn{padding:10px 14px;border:2px solid #ccc;border-radius:8px;background:#fff;font-size:16px;font-weight:600}
 .zbtn.on{border-color:#1d2b53;background:#1d2b53;color:#fff}
 .main{width:100%;padding:16px;border:0;border-radius:10px;background:#1d2b53;color:#fff;font-size:18px;font-weight:600;margin-top:10px}
@@ -118,6 +118,9 @@ const NAME={DB:"Delivery Bay"};
 // 车位：连续编号。A 区 3 排：左排 5、中排 7、右排 7
 const SPOTS={A:[{label:"左排",n:5},{label:"中排",n:7},{label:"右排",n:7}]};
 let spotZone=null,lastSpot=null;
+// 每个车位的坐标（Google Maps）：用来标出离你最近的车位
+const SPOT_XY={A1:[5.90901474082483,116.04993595433287],A2:[5.909044088355428,116.04993595433287],A3:[5.909064098034494,116.04994333040737],A4:[5.909085441691373,116.04994534206404],A5:[5.909108119325898,116.04994936537743],A6:[5.909040086419536,116.05002714943579],A7:[5.9090620970666174,116.05002983164471],A8:[5.909083440723573,116.0500345255103],A9:[5.909107452336662,116.0500398899281],A10:[5.909126128035016,116.05004525434593],A11:[5.909148805667875,116.05004793655485],A12:[5.909169482332324,116.0500559831816],A13:[5.909030081579645,116.05006738256945],A14:[5.9090487572806065,116.05007274698727],A15:[5.909073435884485,116.05007475864394],A16:[5.909096780508757,116.05008213471845],A17:[5.909115456207466,116.05008414637514],A18:[5.9091421357759515,116.05009018134518],A19:[5.909161478462307,116.05010023962858]};
+function nearestSpots(pt,n){const k=Math.PI/180,R=6371000;return Object.entries(SPOT_XY).map(([id,[la,ln]])=>[id,Math.hypot((ln-pt.lng)*k*R*Math.cos(pt.lat*k),(la-pt.lat)*k*R)]).sort((a,b)=>a[1]-b[1]).slice(0,n)}
 const KEY="gpsZoneTest_v1";
 // 预设坐标（Google Maps 拿的）：A 区 4 个角，按顺序围一圈
 const PRESET={A:[{lat:5.909240,lng:116.049955,acc:0},{lat:5.909181,lng:116.050226,acc:0},{lat:5.908949,lng:116.050164,acc:0},{lat:5.909002,lng:116.049893,acc:0}]};
@@ -146,6 +149,7 @@ else navigator.geolocation.watchPosition(p=>{
   $("acc").className=a<=10?"ok":a<=20?"warn":"bad";
   $("coord").textContent=cur.lat.toFixed(6)+", "+cur.lng.toFixed(6);
   renderNow();
+  if($("test").classList.contains("on"))renderSpots();
 },e=>{
   $("gpsState").textContent=e.code===1?"被拒绝（请允许定位）":"读取失败："+e.message;$("gpsState").className="bad";
 },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
@@ -200,15 +204,21 @@ function renderSpots(){
   if(!spotZone)spotZone=(det.inside&&SPOTS[det.zone])?det.zone:zs[0];
   zoneButtons($("spotZones"),spotZone,z=>{spotZone=z;renderSpots()},zs);
   let k=0,h='<div class="cols">';
-  SPOTS[spotZone].forEach(r=>{h+='<div class="col"><div class="h">'+r.label+'</div>';
-    for(let i=0;i<r.n;i++){k++;const id=spotZone+k;h+=`<button class="spot${id===lastSpot?" sel":""}" data-s="${id}">${id}</button>`}h+='</div>'});
-  $("spotGrid").innerHTML=h+'</div>';
+  // 跟现场一样：每排从南边（下面）开始数，所以号码小的放在下面
+  SPOTS[spotZone].forEach(r=>{let col=[];
+    for(let i=0;i<r.n;i++){k++;const id=spotZone+k;col.push(`<button class="spot${id===lastSpot?" sel":""}" data-s="${id}">${id}</button>`)}
+    h+='<div class="col" style="justify-content:flex-end"><div class="h">'+r.label+'</div>'+col.reverse().join('')+'</div>'});
+  let near=cur?nearestSpots(cur,3):[];
+  h+='</div>';
+  if(near.length)h+='<div class="muted" style="margin-top:8px;text-align:center">GPS 最近的车位：'+near.map(([id,d])=>id+'（'+d.toFixed(1)+' 米）').join('、')+'</div>';
+  $("spotGrid").innerHTML=h;
+  if(near.length){const b=$("spotGrid").querySelector('[data-s="'+near[0][0]+'"]');if(b&&!b.classList.contains("sel"))b.style.background="#fff3cd";}
   $("spotGrid").querySelectorAll(".spot").forEach(b=>b.onclick=()=>logTruth(spotZone,b.dataset.s));
 }
 function logTruth(z,spot){
   if(!cur){$("testMsg").textContent="还没收到 GPS";return}
   const r=detect(cur);
-  st.log.unshift({t:new Date().toLocaleString(),truth:z,got:r.zone,inside:!!r.inside,acc:Math.round(cur.acc),lat:+cur.lat.toFixed(6),lng:+cur.lng.toFixed(6),spot:spot||""});
+  st.log.unshift({t:new Date().toLocaleString(),truth:z,got:r.zone,inside:!!r.inside,acc:Math.round(cur.acc),lat:+cur.lat.toFixed(6),lng:+cur.lng.toFixed(6),spot:spot||"",near:(cur&&Object.keys(SPOT_XY).length)?nearestSpots(cur,1)[0][0]:""});
   if(spot){lastSpot=spot;}
   save();
   if(spot)$("spotMsg").textContent="已存：车位 "+spot+"，系统判断区 "+(r.zone||"-")+(r.zone===z?" ✓":" ✗");if(!spot)$("testMsg").textContent="已存：实际 "+z+"，系统判断 "+(r.zone||"-")+(r.zone===z?" ✓":" ✗");
@@ -231,8 +241,9 @@ function render(){
   $("ptTable").innerHTML=pts.length?"<tr><th>#</th><th>坐标</th><th>误差</th></tr>"+pts.map((p,i)=>`<tr><td>${i+1}</td><td>${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</td><td>${p.acc} 米</td></tr>`).join(""):'<tr><td class="muted">'+calZone+' 区还没有记录</td></tr>';
   $("zoneSummary").innerHTML=ZONES.map(z=>{const n=st.zones[z].length;return`<div>${NAME[z]||z}（${OUTSIDE[z]?"围栏外":"围栏内"}）：${n} 个角 <span class="${n>=3?"ok":"warn"}">${n>=3?"✓ 可以用":"还要 "+(3-n)+" 个"}</span></div>`}).join("");
   const L=st.log;const hit=L.filter(x=>x.truth===x.got).length;
-  $("hitRate").innerHTML=L.length?`准确率 <b class="${hit/L.length>=.9?"ok":"warn"}">${Math.round(hit/L.length*100)}%</b>（${hit}/${L.length}）`:"";
-  $("logTable").innerHTML=L.length?"<tr><th>实际</th><th>车位</th><th>判断</th><th>误差</th><th>时间</th></tr>"+L.map(x=>`<tr><td>${x.truth}</td><td>${x.spot||"-"}</td><td class="${x.truth===x.got?"ok":"bad"}">${x.got||"-"}</td><td>${x.acc}米</td><td class="muted">${x.t}</td></tr>`).join(""):'<tr><td class="muted">还没有测试记录</td></tr>';
+  const SL=L.filter(x=>x.spot&&x.near),sh=SL.filter(x=>x.near===x.spot).length;
+  $("hitRate").innerHTML=(L.length?`区准确率 <b class="${hit/L.length>=.9?"ok":"warn"}">${Math.round(hit/L.length*100)}%</b>（${hit}/${L.length}）`:"")+(SL.length?`<br>车位猜中 <b>${Math.round(sh/SL.length*100)}%</b>（${sh}/${SL.length}）`:"");
+  $("logTable").innerHTML=L.length?"<tr><th>实际</th><th>车位</th><th>GPS最近</th><th>判断</th><th>误差</th><th>时间</th></tr>"+L.map(x=>`<tr><td>${x.truth}</td><td>${x.spot||"-"}</td><td class="${x.spot&&x.near===x.spot?"ok":"muted"}">${x.near||"-"}</td><td class="${x.truth===x.got?"ok":"bad"}">${x.got||"-"}</td><td>${x.acc}米</td><td class="muted">${x.t}</td></tr>`).join(""):'<tr><td class="muted">还没有测试记录</td></tr>';
   $("exportBox").value=JSON.stringify(st,null,1);
 }
 render();
