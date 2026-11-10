@@ -102,7 +102,12 @@ const I18N = {
     rows:{left:"Left row",middle:"Middle row",right:"Right row"},
     statusIn:"In stock", statusOut:"Out", statusLoaned:"Loaned",
     reasons:{"Test drive":"Test drive","Car wash":"Car wash","Service":"Service","Delivery":"Delivery","Roadshow":"Roadshow","Other":"Other"},
-    actions:{"Borrow":"Borrowed","Return":"Returned","Spot overwritten":"Spot overwritten"},
+    actions:{"Borrow":"Borrowed","Return":"Returned","Spot overwritten":"Spot overwritten","Transfer":"Key transferred"},
+    keyBoard:"Key board", keyBoardHint:"Where every car and key is right now. Tap a car to open it.", boardSearch:"Search plate / model / name",
+    keyAt:"🔑 {0}", parkedAt:"Parked at {0}",
+    transferTitle:"Key transfer", transferHint:"The system shows the key with <b>{0}</b>. If you now have the key in your hand, take it over here.",
+    transferReason:"What are you using it for?", sameReason:"Same ({0})", transferBtn:"I have the key now", transferred:"✓ Key is now with you",
+    transferredMsg:"When you're done, park the car and scan the key tag <b>next to the car</b> to return it.", orReturn:"Or, if the car is already parked back:",
     all:"All", alertsTitle:"⚠ Alerts", noAlerts:"✓ No alerts", alertsN:"Alerts",
     tabCars:"Cars", tabMap:"Parking", tabStaff:"Staff", tabQr:"Print QR", refresh:"↻ Refresh",
     searchPh:"Search car ID / model / name / spot", colCar:"Car", colStatus:"Status", colWhere:"Spot / key", colTime:"Time",
@@ -120,7 +125,8 @@ const I18N = {
         E_PIN_FORMAT:"New PIN must be 6 digits", E_NO_EMAIL:"No Gmail registered for this staff — ask admin to reset", E_NO_CAR:"Car not found: {0}",
         E_ALREADY_OUT:"This car has already been borrowed by {0}", E_REASON:"Please choose a reason", E_LONG_FIELDS:"Roadshow / Other: fill in the note and expected return date",
         E_NO_SPOT:"Please choose a spot", E_LOGIN:"Please log in again", E_DISABLED:"Your account is disabled", E_ADMIN:"Admins only",
-        E_CAR_ID:"Car ID is required (plate or chassis no.)", E_NAME:"Nickname is required", E_NET:"Can't reach the system. Check your connection and try again."}
+        E_CAR_ID:"Car ID is required (plate or chassis no.)", E_NAME:"Nickname is required", E_NET:"Can't reach the system. Check your connection and try again.",
+        E_NOT_OUT:"This car is in stock — borrow it instead", E_SAME:"The key is already recorded with you"}
   },
   zh: {
     title:"停车 · 钥匙系统", loading:"载入中…", login:"登录", nickname:"你的小名", choose:"请选择",
@@ -149,7 +155,12 @@ const I18N = {
     rows:{left:"左排",middle:"中排",right:"右排"},
     statusIn:"在店", statusOut:"借出中", statusLoaned:"外借",
     reasons:{"Test drive":"试驾","Car wash":"洗车","Service":"维修","Delivery":"交车","Roadshow":"Roadshow","Other":"其他"},
-    actions:{"Borrow":"借出","Return":"归还","Spot overwritten":"车位被覆盖"},
+    actions:{"Borrow":"借出","Return":"归还","Spot overwritten":"车位被覆盖","Transfer":"钥匙转交"},
+    keyBoard:"钥匙板", keyBoardHint:"每辆车和钥匙现在在哪里。点一辆车可以打开它。", boardSearch:"搜车牌 / 车型 / 人名",
+    keyAt:"🔑 {0}", parkedAt:"停在 {0}",
+    transferTitle:"钥匙转交", transferHint:"系统显示钥匙在 <b>{0}</b> 手上。如果钥匙现在在你手上，在这里接手。",
+    transferReason:"你拿来做什么？", sameReason:"一样（{0}）", transferBtn:"钥匙现在在我手上", transferred:"✓ 钥匙已经转到你名下",
+    transferredMsg:"用完后停好车，<b>在车旁边</b>扫钥匙牌归还。", orReturn:"或者，如果车已经停回来了：",
     all:"全部", alertsTitle:"⚠ 异常", noAlerts:"✓ 没有异常", alertsN:"异常",
     tabCars:"车辆", tabMap:"停车场", tabStaff:"员工", tabQr:"打印二维码", refresh:"↻ 刷新",
     searchPh:"搜车辆ID / 车型 / 人名 / 车位", colCar:"车辆", colStatus:"状态", colWhere:"位置 / 钥匙", colTime:"时间",
@@ -167,7 +178,8 @@ const I18N = {
         E_PIN_FORMAT:"新 PIN 要 6 位数字", E_NO_EMAIL:"这个员工没有登记 Gmail，请找 admin 重设", E_NO_CAR:"找不到这辆车：{0}",
         E_ALREADY_OUT:"这辆车已经被 {0} 借出了", E_REASON:"请选借出原因", E_LONG_FIELDS:"Roadshow / 其他：要填备注和预计回来的日期",
         E_NO_SPOT:"请选车位", E_LOGIN:"请重新登录", E_DISABLED:"你的账号已经停用", E_ADMIN:"只有 admin 可以看",
-        E_CAR_ID:"要填车辆ID（车牌或底盘号）", E_NAME:"要填小名", E_NET:"连不上系统，请检查网络再试"}
+        E_CAR_ID:"要填车辆ID（车牌或底盘号）", E_NAME:"要填小名", E_NET:"连不上系统，请检查网络再试",
+        E_NOT_OUT:"这辆车在店，请直接借出", E_SAME:"钥匙已经记在你名下"}
   }
 };
 
@@ -245,12 +257,28 @@ function viewHome(){
     <p class="muted" style="margin:0">${t("scanHint")}</p>
     <label>${t("orType")}</label><input id="cid" placeholder="${t("carIdPh")}">
     <button class="btn" id="open">${t("openCar")}</button></div>
+    <div class="card"><h3>${t("keyBoard")}</h3><p class="muted" style="margin-top:0">${t("keyBoardHint")}</p>
+      <input id="bq" placeholder="${t("boardSearch")}"><div id="board" class="muted" style="margin-top:8px">${t("loading")}</div></div>
     ${ME.defaultPin?`<div class="card warn">${t("defaultPinWarn")}</div>`:""}
     <div class="card">${ME.role==="admin"?`<button class="btn sec" onclick="location.hash='admin'">${t("adminBtn")}</button>`:""}
     <button class="btn sec" onclick="location.hash='pin'">${t("changePin")}</button>
     <button class="btn sec" id="out">${t("logout")}</button></div>`;
   $("#open").onclick=()=>{const v=$("#cid").value.trim();if(v)location.href=carUrl(v)};
   $("#out").onclick=()=>{store.set("token",null);ME=null;route()};
+  loadBoard();
+}
+let BOARD=[];
+async function loadBoard(){
+  try{BOARD=(await api("list")).cars;drawBoard()}catch(e){if($("#board"))showErr($("#board"),e)}
+  if($("#bq"))$("#bq").oninput=drawBoard;
+}
+function drawBoard(){
+  const q=($("#bq")?.value||"").toUpperCase();
+  const order={Out:0,Loaned:1,In:2};
+  const list=BOARD.filter(c=>!q||(c.id+c.model+c.holder+c.spot).toUpperCase().includes(q)).sort((a,b)=>order[a.status]-order[b.status]||a.id.localeCompare(b.id));
+  $("#board").innerHTML=`<table>${list.map(c=>`<tr class="click" data-car="${esc(c.id)}"><td><b>${esc(c.id)}</b><div class="muted">${esc(c.model)}</div></td><td>${badge(c.status)}</td>
+    <td>${c.status==="In"?(c.spot?esc(t("parkedAt",c.spot)):`<span class="warn">${t("noSpot")}</span>`):`<b>${esc(t("keyAt",c.holder))}</b><div class="muted">${esc(rsText(c.reason))} · ${since(c.outTime)}</div>`}</td></tr>`).join("")||`<tr><td>${t("none")}</td></tr>`}</table>`;
+  $("#board").querySelectorAll("[data-car]").forEach(r=>r.onclick=()=>location.href=carUrl(r.dataset.car));
 }
 
 function viewPin(){
@@ -275,7 +303,26 @@ async function viewCar(id){
   $("#app").innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.id)}</h2>${badge(c.status)}</div>
     <div class="muted">${esc([c.model,c.color].filter(Boolean).join(" · "))}</div>${info}</div>
     <div id="act"></div>`;
-  if(c.status==="In")stepBorrow(c);else stepReturnStart(c,r.occupied);
+  if(c.status==="In")stepBorrow(c);
+  else if(String(c.holder).toUpperCase()===String(ME.name).toUpperCase())stepReturnStart(c,r.occupied);
+  else stepTransfer(c,r.occupied);
+}
+
+function stepTransfer(c,occ){
+  let reason=c.reason;
+  const all=CONFIG.SHORT_REASONS.concat(CONFIG.LONG_REASONS);
+  $("#act").innerHTML=`<div class="card"><h3>${t("transferTitle")}</h3><p class="muted" style="margin-top:0">${t("transferHint",esc(c.holder))}</p>
+    <label>${t("transferReason")}</label><div class="row" id="rs">${all.map(x=>`<button class="chip ${x===reason?"on":""}" data-r="${esc(x)}">${esc(x===c.reason?t("sameReason",rsText(x)):rsText(x))}</button>`).join("")}</div>
+    <div id="extra"></div><button class="btn" id="tgo">${t("transferBtn")}</button><div id="msg"></div></div>
+    <div class="card"><p class="muted" style="margin-top:0">${t("orReturn")}</p><button class="btn sec" id="retbtn">${t("returnTitle")}</button></div>`;
+  const extra=()=>{$("#extra").innerHTML=CONFIG.LONG_REASONS.includes(reason)&&reason!==c.reason?`<label>${t("noteLbl")}</label><input id="note"><label>${t("expLbl")}</label><input id="exp" type="date">`:""};
+  $("#rs").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{reason=b.dataset.r;$("#rs").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));extra()});
+  $("#tgo").onclick=async()=>{const d={carId:c.id,reason};
+    if($("#note")){d.note=$("#note").value.trim();d.expected=$("#exp").value;if(!d.note||!d.expected)return showErr($("#msg"),t("needLong"))}
+    busy($("#tgo"),true,t("working"));
+    try{await api("transfer",d);$("#act").innerHTML=`<div class="card ok"><h2>${t("transferred")}</h2>${t("transferredMsg")}</div>`;setTimeout(()=>viewCar(c.id),2200)}
+    catch(e){showErr($("#msg"),e);busy($("#tgo"),false,t("transferBtn"))}};
+  $("#retbtn").onclick=()=>stepReturnStart(c,occ);
 }
 
 function stepBorrow(c){
