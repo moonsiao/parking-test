@@ -298,7 +298,7 @@ async function viewCar(id){
   let r;try{r=await api("car",{carId:id})}catch(e){$("#app").innerHTML=`<div class="card"><div class="err">${esc(e.message)}</div><button class="btn sec" onclick="location.href=location.pathname">${t("home")}</button></div>`;return}
   const c=r.car;
   let info="";
-  if(c.status==="In")info=c.spot?`<div class="big">${esc(c.spot)}</div><div class="muted">${esc(t("zoneSpot",c.zone))}${c.method==="manual"?" · "+t("manual"):""} · ${esc(c.updated)}</div>`:`<div class="warn">${t("noSpotYet")}</div>`;
+  if(c.status==="In")info=c.spot?`<div class="big">${esc(c.spot)}</div><div class="muted">${esc(t("zoneSpot",c.zone))}${c.method==="manual"?" · "+t("manual"):""} · ${esc(c.updated)}</div>${CONFIG.ZONES[c.zone]?`<div style="margin-top:10px">${zoneMap(c.zone,{occupied:r.occupied,highlight:c.spot,max:420})}</div>`:""}`:`<div class="warn">${t("noSpotYet")}</div>`;
   else info=`<div style="margin-top:6px">${t("keyWith",esc(c.holder),esc(rsText(c.reason)))}</div><div class="muted">${esc(t("outAt",fmtTime(c.outTime),since(c.outTime)))}${c.expected?esc(t("expectBack",c.expected)):""}${c.note?" · "+esc(c.note):""}</div>`;
   $("#app").innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.id)}</h2>${badge(c.status)}</div>
     <div class="muted">${esc([c.model,c.color].filter(Boolean).join(" · "))}</div>${info}</div>
@@ -398,6 +398,39 @@ function inPoly(pt,poly){const P=toXY([pt.lat,pt.lng],poly[0]),V=poly.map(v=>toX
 function detectZone(pt){return Object.keys(CONFIG.ZONES).find(z=>inPoly(pt,CONFIG.ZONES[z]))||null}
 function nearestSpot(pt,zone){let best=null,bd=1e9;(CONFIG.SPOTS[zone]||[]).forEach(r=>Object.entries(r.spots).forEach(([id,p])=>{const[x,y]=toXY(p,[pt.lat,pt.lng]);const d=Math.hypot(x,y);if(d<bd){bd=d;best=id}}));return best}
 
+/* ---------- Map (drawn from real coordinates) ---------- */
+function zoneMap(zone,opt={}){
+  const poly=CONFIG.ZONES[zone],o=poly[0],k=Math.PI/180,R=6371000;
+  const xy=p=>[(p[1]-o[1])*k*R*Math.cos(o[0]*k),-(p[0]-o[0])*k*R]; // x east, y down(south)
+  const P=poly.map(xy);
+  const rows=(CONFIG.SPOTS[zone]||[]).map(r=>({label:r.label,spots:Object.entries(r.spots).map(([id,p])=>({id,xy:xy(p)}))}));
+  const spotsXY=[].concat(...rows.map(r=>r.spots.map(s=>s.xy)));const all=spotsXY.length?spotsXY:P;
+  const pad=4.5,minX=Math.min(...all.map(p=>p[0]))-pad,maxX=Math.max(...all.map(p=>p[0]))+pad,minY=Math.min(...all.map(p=>p[1]))-pad,maxY=Math.max(...all.map(p=>p[1]))+pad;
+  const W=maxX-minX,H=maxY-minY,f=n=>n.toFixed(2);
+  let g=`<polygon points="${P.map(p=>f(p[0])+","+f(p[1])).join(" ")}" fill="#4a4f57" stroke="#e8c547" stroke-width="0.4" stroke-dasharray="1.5 1"/>`;
+  rows.forEach(r=>{
+    const a=r.spots[0].xy,b=r.spots[r.spots.length-1].xy;let dx=b[0]-a[0],dy=b[1]-a[1];const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
+    const nx=-dy,ny=dx,ang=Math.atan2(dy,dx)*180/Math.PI;
+    r.spots.forEach(s=>{
+      const [cx,cy]=s.xy,car=(opt.occupied||{})[s.id],hl=opt.highlight===s.id;
+      const click=opt.clickable?` data-spot="${s.id}" ${car?`data-c="${esc(car)}"`:""} style="cursor:pointer"`:"";
+      g+=`<g transform="translate(${f(cx)},${f(cy)}) rotate(${f(ang)})"${click}>
+        <rect x="-1.2" y="-2.2" width="2.4" height="4.4" fill="${hl?"#2e7d32":"#4a4f57"}" stroke="#fff" stroke-width="0.15"/>
+        ${car?`<rect x="-0.9" y="-1.9" width="1.8" height="3.8" rx="0.55" fill="${hl?"#c8e6c9":"#1d6fd1"}" stroke="#0d3b75" stroke-width="0.1"/>
+          <rect x="-0.7" y="-1.15" width="1.4" height="0.7" rx="0.2" fill="#9cc7f5" opacity=".9"/><rect x="-0.7" y="0.7" width="1.4" height="0.5" rx="0.2" fill="#9cc7f5" opacity=".9"/>`:""}
+      </g>`;
+      if(hl)g+=`<circle cx="${f(cx)}" cy="${f(cy)}" r="3.2" fill="none" stroke="#ff5252" stroke-width="0.35"><animate attributeName="r" values="2.6;3.6;2.6" dur="1.6s" repeatCount="indefinite"/></circle>`;
+      if(car)g+=`<text x="${f(cx)}" y="${f(cy-0.35)}" font-size="0.6" font-weight="700" fill="${hl?"#1b5e20":"#fff"}" text-anchor="middle" dominant-baseline="middle" pointer-events="none">${esc(car)}</text>
+        <text x="${f(cx)}" y="${f(cy+0.45)}" font-size="0.5" fill="${hl?"#1b5e20":"#dbe9ff"}" text-anchor="middle" dominant-baseline="middle" pointer-events="none">${s.id}</text>`;
+      else g+=`<text x="${f(cx)}" y="${f(cy)}" font-size="0.9" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="middle" pointer-events="none">${s.id}</text>`;
+    });
+  });
+  // north arrow
+  g+=`<g transform="translate(${f(minX+2)},${f(minY+2.8)})"><polygon points="0,-2 0.9,1 0,0.4 -0.9,1" fill="#fff"/><text y="2.4" font-size="1.1" fill="#fff" text-anchor="middle">N</text></g>`;
+  return `<svg viewBox="${f(minX)} ${f(minY)} ${f(W)} ${f(H)}" style="width:100%;max-width:${opt.max||520}px;display:block;margin:0 auto;background:#7d9a5b;border-radius:10px">${g}</svg>`;
+}
+function L_rows(l){return (L().rows&&L().rows[l])||l}
+
 /* ---------- Admin ---------- */
 let ADM={data:null,tab:"cars",filter:"all",q:""};
 async function viewAdmin(){
@@ -425,7 +458,7 @@ function renderAdmin(){
       <button class="btn sec" id="addcar">${t("save")}</button><div id="cmsg"></div></div>`;
   }else if(ADM.tab==="map"){
     body=Object.keys(CONFIG.SPOTS).map(z=>{
-      const grid=spotGrid(z,id=>{const cid=d.occupied[id];return`<button class="spot ${cid?"mine":""}" ${cid?`data-c="${esc(cid)}"`:""}>${id}${cid?`<small style="color:#fff">${esc(cid)}</small>`:""}</button>`});
+      const grid=zoneMap(z,{occupied:d.occupied,clickable:true,max:640});
       const total=CONFIG.SPOTS[z].reduce((a,r)=>a+Object.keys(r.spots).length,0),used=CONFIG.SPOTS[z].reduce((a,r)=>a+Object.keys(r.spots).filter(id=>d.occupied[id]).length,0);
       return`<div class="card"><h3>${esc(t("zoneUsed",z,used,total))}</h3>${grid}</div>`}).join("");
   }else if(ADM.tab==="staff"){
