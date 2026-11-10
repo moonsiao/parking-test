@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parking &amp; Key Tracker</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f4f5f7;color:#222;font-size:16px}
+header{background:#1d2b53;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+header b{font-size:17px}header span{font-size:13px;opacity:.85}
+main{max-width:760px;margin:0 auto;padding:14px}
+.card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:0 0 8px}
+.muted{color:#777;font-size:13px}.ok{color:#0a7d32}.warn{color:#b26a00}.bad{color:#c62828}
+.btn{display:block;width:100%;padding:15px;border:0;border-radius:10px;background:#1d2b53;color:#fff;font-size:17px;font-weight:600;margin-top:10px;cursor:pointer}
+.btn.sec{background:#fff;color:#1d2b53;border:2px solid #1d2b53}.btn.green{background:#0a7d32}.btn.red{background:#c62828}
+.btn:disabled{opacity:.5}
+.sm{padding:7px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:14px;cursor:pointer}
+input,select{width:100%;padding:12px;font-size:16px;border:1px solid #ccc;border-radius:8px;margin-top:6px}
+label{display:block;margin-top:10px;font-size:14px;color:#555}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{padding:10px 14px;border:2px solid #ccc;border-radius:8px;background:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.chip.on{border-color:#1d2b53;background:#1d2b53;color:#fff}
+.badge{display:inline-block;white-space:nowrap;padding:3px 10px;border-radius:20px;font-size:13px;font-weight:600}
+.b-in{background:#e3f4e8;color:#0a7d32}.b-out{background:#fff3cd;color:#8a5a00}.b-long{background:#e6ecff;color:#1d2b53}
+.big{font-size:30px;font-weight:700;margin:4px 0}
+.cols{display:flex;gap:10px;justify-content:center;align-items:flex-end}
+.col{display:flex;flex-direction:column;gap:6px;align-items:center}.col .h{font-size:12px;color:#777}
+.spot{width:64px;min-height:46px;padding:4px 0;border:2px solid #1d2b53;border-radius:6px;background:#fff;font-weight:700;font-size:15px;cursor:pointer;line-height:1.1}
+.spot small{display:block;font-size:10px;font-weight:400;color:#777}
+.spot.taken{border-color:#bbb;background:#eee;color:#999}.spot.near{background:#fff3cd}.spot.mine{background:#0a7d32;color:#fff;border-color:#0a7d32}
+.err{background:#fdecea;color:#c62828;padding:10px;border-radius:8px;margin-top:10px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:8px 6px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+tr.click{cursor:pointer}tr.click:hover{background:#f7f8fa}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.stat b{display:block;font-size:26px}.stat span{font-size:12px;color:#777}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.modal>div{background:#fff;width:100%;max-width:560px;max-height:85vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.qrgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.qr{border:1px dashed #999;padding:8px;text-align:center;font-weight:700;break-inside:avoid}
+.qr div{display:flex;justify-content:center;margin-bottom:4px}
+.lang{margin-left:8px;padding:4px 10px;border:1px solid rgba(255,255,255,.6);border-radius:6px;background:transparent;color:#fff;font-size:13px;cursor:pointer}
+@media print{header,.noprint{display:none!important}main{max-width:none;padding:0}.card{box-shadow:none}}
+</style>
+</head>
+<body>
+<header><b id="title">Parking &amp; Key Tracker</b><span><span id="who"></span> <button class="lang" id="lang">中文</button></span></header>
+<main id="app"><div class="card">Loading…</div></main>
+<div id="modal"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* ================= Settings (change per dealer) ================= */
+const CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbwHobvZdNQh303p-iw-XChL1pp4qPqaXXYwEARBpjLrYi-lq77j4VreiKAgRp6cbssX5A/exec",
+  // Zones: corner coordinates in order around the edge
+  ZONES: {
+    A: [[5.909240,116.049955],[5.909181,116.050226],[5.908949,116.050164],[5.909002,116.049893]]
+  },
+  // Spots: one group per row, numbered from the south end; coordinates only used to hint the nearest spot
+  SPOTS: {
+    A: [
+      {label:"left", spots:{A1:[5.90901474,116.04993595],A2:[5.90904409,116.04993595],A3:[5.90906410,116.04994333],A4:[5.90908544,116.04994534],A5:[5.90910812,116.04994937]}},
+      {label:"middle", spots:{A6:[5.90904009,116.05002715],A7:[5.90906210,116.05002983],A8:[5.90908344,116.05003453],A9:[5.90910745,116.05003989],A10:[5.90912613,116.05004525],A11:[5.90914881,116.05004794],A12:[5.90916948,116.05005598]}},
+      {label:"right", spots:{A13:[5.90903008,116.05006738],A14:[5.90904876,116.05007275],A15:[5.90907344,116.05007476],A16:[5.90909678,116.05008213],A17:[5.90911546,116.05008415],A18:[5.90914214,116.05009018],A19:[5.90916148,116.05010024]}}
+    ]
+  },
+  SHORT_REASONS: ["Test drive","Car wash","Service","Delivery"],
+  LONG_REASONS: ["Roadshow","Other"]
+};
+/* ================================================================ */
+
+const I18N = {
+  en: {
+    title:"Parking & Key Tracker", loading:"Loading…", login:"Log in", nickname:"Your nickname", choose:"Please choose",
+    pin6:"PIN (6 digits)", loggingIn:"Logging in…", remember:"This phone will remember you", forgot:"Forgot PIN",
+    pickNamePin:"Choose your nickname and enter your PIN", pickName:"Choose your nickname first", pinSent:"A new PIN has been sent to your Gmail",
+    hello:"Hi, {0}", scanHint:"To borrow or return a car, scan the QR code on the key tag with your phone camera.",
+    orType:"Or type the car ID", carIdPh:"e.g. TD1 or plate number", openCar:"Open this car",
+    defaultPinWarn:"You are still using the default PIN (111111). Change it so nobody else can use your name.",
+    adminBtn:"Admin dashboard", changePin:"Change PIN", logout:"Log out", curPin:"Current PIN", newPin:"New PIN (6 digits)",
+    save:"Save", back:"Back", pinChanged:"PIN changed", home:"Home",
+    zoneSpot:"Zone {0}", manual:"manual", noSpotYet:"In stock, but no spot recorded yet",
+    keyWith:"Key is with <b>{0}</b> · {1}", outAt:"Out {0} ({1})", expectBack:" · expected back {0}",
+    borrowTitle:"Borrow this car", borrowBtn:"Borrow and take the key", working:"Working…",
+    noteLbl:"Note (where / what for)", expLbl:"Expected return date", needLong:"Please fill in the note and expected return date",
+    borrowed:"✓ Borrowed", borrowedMsg:"You can take the key. When you are back and parked, scan the key tag again <b>next to the car</b>.",
+    returnTitle:"Return", returnHint:"Park the car, then <b>stand next to it</b> and press the button.", returnBtn:"I'm next to the car, start return",
+    locating:"Getting location…", noGeo:"This phone can't get a location", geoDenied:"Couldn't get a location (location off or blocked)",
+    outside:"You don't seem to be in the parking area (GPS accuracy {0} m). Please walk to the car and try again.",
+    retry:"Try again", manualBtn:"I'm next to the car, choose manually", manualNote:"Manual choices are flagged for admin to check.",
+    pickZoneWhy:"{0}, please choose the zone yourself.", whichZone:"Which zone?",
+    spotTitle:"Zone {0} · tap the spot you parked in", gpsSays:"GPS says you're in zone {0}.", manualPick:"Manual choice.",
+    nearHint:" Yellow = nearest to you (just a hint).", lookGround:" Check the number on the ground.",
+    confirmSpot:"Park at {0}?", takenWarn:"The system shows <b>{1}</b> in {0}. If that car is no longer there, confirming will clear its spot and alert admin.",
+    confirm:"Confirm", another:"Choose another", saving:"Saving…", justTaken:"{0} was just taken by {1}. Please confirm again.", confirmOverwrite:"Confirm overwrite",
+    returned:"✓ Returned: {0}", returnedMsg:"Please put the key back in the key box.",
+    rows:{left:"Left row",middle:"Middle row",right:"Right row"},
+    statusIn:"In stock", statusOut:"Out", statusLoaned:"Loaned",
+    reasons:{"Test drive":"Test drive","Car wash":"Car wash","Service":"Service","Delivery":"Delivery","Roadshow":"Roadshow","Other":"Other"},
+    actions:{"Borrow":"Borrowed","Return":"Returned","Spot overwritten":"Spot overwritten"},
+    all:"All", alertsTitle:"⚠ Alerts", noAlerts:"✓ No alerts", alertsN:"Alerts",
+    tabCars:"Cars", tabMap:"Parking", tabStaff:"Staff", tabQr:"Print QR", refresh:"↻ Refresh",
+    searchPh:"Search car ID / model / name / spot", colCar:"Car", colStatus:"Status", colWhere:"Spot / key", colTime:"Time",
+    noSpot:"no spot", gpsOutside:"GPS outside", none:"None", expShort:"exp. {0}",
+    addCar:"Add / edit car", carIdFull:"Car ID (plate or chassis no.)", model:"Model", colour:"Colour",
+    zoneUsed:"Zone {0} · {1}/{2} occupied", colName:"Nickname", colEmail:"Gmail", colRole:"Role",
+    disabled:"disabled", defaultPin:"default PIN", edit:"Edit", resetPin:"Reset PIN to 111111", disable:"Disable", enable:"Enable",
+    addStaff:"Add / edit staff", emailPh:"Gmail (for forgotten PIN)", roleStaff:"Staff", roleAdmin:"Admin", newStaffPin:"New staff PIN is 111111.",
+    qrHint:"Stick one on each key tag. Staff scan it with the phone camera to open that car.", print:"Print",
+    close:"Close", history:"History", noHistory:"No records yet", colWhen:"Time", colAction:"Action", colWho:"Who", colDetail:"Details",
+    deactivate:"Deactivate this car (sold / not in store)", minutes:"{0} min", hoursMin:"{0} h {1} min",
+    al:{overdue:"Out for more than {0} hours", late_loan:"Loan past expected date ({0})", no_spot:"In stock but no spot",
+        gps_outside:"Returned with GPS outside parking area", default_pin:"Still using default PIN", many_manual:"Last {0} returns chosen manually"},
+    err:{E_BAD_REQUEST:"Request error", E_NO_STAFF:"No such staff, or disabled", E_PIN:"Wrong PIN", E_OLD_PIN:"Current PIN is wrong",
+        E_PIN_FORMAT:"New PIN must be 6 digits", E_NO_EMAIL:"No Gmail registered for this staff — ask admin to reset", E_NO_CAR:"Car not found: {0}",
+        E_ALREADY_OUT:"This car has already been borrowed by {0}", E_REASON:"Please choose a reason", E_LONG_FIELDS:"Roadshow / Other: fill in the note and expected return date",
+        E_NO_SPOT:"Please choose a spot", E_LOGIN:"Please log in again", E_DISABLED:"Your account is disabled", E_ADMIN:"Admins only",
+        E_CAR_ID:"Car ID is required (plate or chassis no.)", E_NAME:"Nickname is required", E_NET:"Can't reach the system. Check your connection and try again."}
+  },
+  zh: {
+    title:"停车 · 钥匙系统", loading:"载入中…", login:"登录", nickname:"你的小名", choose:"请选择",
+    pin6:"PIN（6 位数字）", loggingIn:"登录中…", remember:"登录一次，这支手机就会记住你", forgot:"忘记 PIN",
+    pickNamePin:"请选小名，输入 PIN", pickName:"先选你的小名", pinSent:"新 PIN 已经寄到你登记的 Gmail",
+    hello:"你好，{0}", scanHint:"借车或还车：用手机相机扫钥匙牌上的二维码。",
+    orType:"或者输入车辆ID", carIdPh:"例如 TD1 或车牌", openCar:"打开这辆车",
+    defaultPinWarn:"你还在用默认 PIN（111111）。建议改成你自己的，别人就不能用你的名字。",
+    adminBtn:"Admin 总控页", changePin:"改 PIN", logout:"登出", curPin:"现在的 PIN", newPin:"新的 PIN（6 位数字）",
+    save:"保存", back:"返回", pinChanged:"PIN 已经改好", home:"首页",
+    zoneSpot:"{0} 区", manual:"手动", noSpotYet:"在店，但还没有记录车位",
+    keyWith:"钥匙在 <b>{0}</b> 手上 · {1}", outAt:"借出 {0}（{1}）", expectBack:" · 预计 {0} 回来",
+    borrowTitle:"借出这辆车", borrowBtn:"借出，拿钥匙", working:"处理中…",
+    noteLbl:"备注（去哪里 / 做什么）", expLbl:"预计回来的日期", needLong:"请填备注和预计回来的日期",
+    borrowed:"✓ 已借出", borrowedMsg:"可以拿钥匙了。回来停好车后，<b>在车旁边</b>再扫一次钥匙牌。",
+    returnTitle:"归还", returnHint:"停好车，<b>站在车旁边</b>再按。", returnBtn:"我在车旁边，开始归还",
+    locating:"读取位置中…", noGeo:"这支手机拿不到位置", geoDenied:"拿不到位置（定位没开或被拒绝）",
+    outside:"你现在好像不在停车区（GPS 误差 {0} 米）。请走到车旁边再试。",
+    retry:"再试一次", manualBtn:"我就在车旁边，手动选", manualNote:"手动选会通知 admin 检查。",
+    pickZoneWhy:"{0}，请自己选区。", whichZone:"停在哪一区？",
+    spotTitle:"{0} 区 · 点你停的车位", gpsSays:"GPS 判断你在 {0} 区。", manualPick:"手动选择。",
+    nearHint:" 黄色 = 离你最近（只是参考）。", lookGround:"看地上的号码。",
+    confirmSpot:"确认停在 {0}？", takenWarn:"系统显示 {0} 停着 <b>{1}</b>。如果那辆车其实已经不在了，按确认会把它的车位清掉，并通知 admin。",
+    confirm:"确认", another:"换一个", saving:"保存中…", justTaken:"{0} 刚刚被 {1} 用了，请再确认一次。", confirmOverwrite:"确认覆盖",
+    returned:"✓ 已归还：{0}", returnedMsg:"请把钥匙放回钥匙箱。",
+    rows:{left:"左排",middle:"中排",right:"右排"},
+    statusIn:"在店", statusOut:"借出中", statusLoaned:"外借",
+    reasons:{"Test drive":"试驾","Car wash":"洗车","Service":"维修","Delivery":"交车","Roadshow":"Roadshow","Other":"其他"},
+    actions:{"Borrow":"借出","Return":"归还","Spot overwritten":"车位被覆盖"},
+    all:"全部", alertsTitle:"⚠ 异常", noAlerts:"✓ 没有异常", alertsN:"异常",
+    tabCars:"车辆", tabMap:"停车场", tabStaff:"员工", tabQr:"打印二维码", refresh:"↻ 刷新",
+    searchPh:"搜车辆ID / 车型 / 人名 / 车位", colCar:"车辆", colStatus:"状态", colWhere:"位置 / 钥匙", colTime:"时间",
+    noSpot:"没车位", gpsOutside:"GPS 不在区", none:"没有", expShort:"预计 {0}",
+    addCar:"加车 / 改车", carIdFull:"车辆ID（车牌或底盘号）", model:"车型", colour:"颜色",
+    zoneUsed:"{0} 区 · {1}/{2} 有车", colName:"小名", colEmail:"Gmail", colRole:"角色",
+    disabled:"停用", defaultPin:"默认 PIN", edit:"改", resetPin:"PIN 重设为 111111", disable:"停用", enable:"启用",
+    addStaff:"加员工 / 改员工", emailPh:"Gmail（忘记 PIN 时用）", roleStaff:"员工", roleAdmin:"Admin", newStaffPin:"新员工的 PIN 是 111111。",
+    qrHint:"每张贴在钥匙牌上。员工用手机相机扫，就会打开这辆车的页面。", print:"打印",
+    close:"关闭", history:"历史", noHistory:"还没有记录", colWhen:"时间", colAction:"动作", colWho:"谁", colDetail:"详情",
+    deactivate:"停用这辆车（已卖 / 不在店）", minutes:"{0} 分钟", hoursMin:"{0} 小时 {1} 分钟",
+    al:{overdue:"借出超过 {0} 小时", late_loan:"外借超过预计日期（{0}）", no_spot:"在店但没有车位",
+        gps_outside:"归还时 GPS 不在停车区", default_pin:"还在用默认 PIN", many_manual:"最近 {0} 次都是手动选车位"},
+    err:{E_BAD_REQUEST:"请求出错", E_NO_STAFF:"没有这个员工，或者已经停用", E_PIN:"PIN 不对", E_OLD_PIN:"现在的 PIN 不对",
+        E_PIN_FORMAT:"新 PIN 要 6 位数字", E_NO_EMAIL:"这个员工没有登记 Gmail，请找 admin 重设", E_NO_CAR:"找不到这辆车：{0}",
+        E_ALREADY_OUT:"这辆车已经被 {0} 借出了", E_REASON:"请选借出原因", E_LONG_FIELDS:"Roadshow / 其他：要填备注和预计回来的日期",
+        E_NO_SPOT:"请选车位", E_LOGIN:"请重新登录", E_DISABLED:"你的账号已经停用", E_ADMIN:"只有 admin 可以看",
+        E_CAR_ID:"要填车辆ID（车牌或底盘号）", E_NAME:"要填小名", E_NET:"连不上系统，请检查网络再试"}
+  }
+};
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+let LANG=store.get("lang")==="zh"?"zh":"en";
+function L(){return I18N[LANG]}
+function t(k,...a){let s=k.split(".").reduce((o,p)=>o&&o[p],L());if(s==null)s=k;return String(s).replace(/\{(\d)\}/g,(_,i)=>a[i]??"")}
+function errText(code){const[c,p]=String(code).split("|");return L().err[c]?t("err."+c,p):code}
+function stText(s){return s==="In"?t("statusIn"):s==="Out"?t("statusOut"):s==="Loaned"?t("statusLoaned"):s}
+function rsText(r){return L().reasons[r]||r}
+let ME=null;
+
+async function api(action,data={}){
+  const body=JSON.stringify(Object.assign({action,token:store.get("token")},data));
+  let r;
+  try{r=await fetch(CONFIG.API_URL,{method:"POST",body}).then(x=>x.json())}
+  catch(e){throw new Error(t("err.E_NET"))}
+  if(!r.ok){if(/^E_(LOGIN|DISABLED)/.test(r.error)){store.set("token",null);ME=null}throw new Error(errText(r.error))}
+  return r;
+}
+function params(){return new URLSearchParams(location.search)}
+function carUrl(id){return location.origin+location.pathname+"?car="+encodeURIComponent(id)}
+function badge(s){return `<span class="badge ${s==="In"?"b-in":s==="Loaned"?"b-long":"b-out"}">${esc(stText(s))}</span>`}
+function fmtTime(iso){if(!iso)return"";const d=new Date(iso);return d.toLocaleString(LANG==="zh"?"zh-MY":"en-MY",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+function since(iso){if(!iso)return"";const m=Math.round((Date.now()-new Date(iso))/60000);return m<60?t("minutes",m):t("hoursMin",Math.floor(m/60),m%60)}
+function showErr(el,e){el.innerHTML=`<div class="err">${esc(e.message||e)}</div>`}
+function busy(btn,on,txt){if(!btn)return;btn.disabled=on;if(txt)btn.textContent=txt}
+function setChrome(){document.documentElement.lang=LANG==="zh"?"zh":"en";document.title=t("title");$("#title").textContent=t("title");$("#lang").textContent=LANG==="zh"?"EN":"中文"}
+$("#lang").onclick=()=>{LANG=LANG==="zh"?"en":"zh";store.set("lang",LANG);setChrome();
+  if(CURRENT_REDRAW)CURRENT_REDRAW();else route()};
+let CURRENT_REDRAW=null;
+
+/* ---------- Routing ---------- */
+async function route(){
+  CURRENT_REDRAW=null;setChrome();
+  $("#modal").innerHTML="";
+  if(!store.get("token"))return viewLogin();
+  if(!ME){try{const r=await api("me");ME=r}catch(e){return viewLogin(e)}}
+  $("#who").textContent=ME.name+(ME.role==="admin"?" · admin":"");
+  const car=params().get("car");
+  if(car)return viewCar(car);
+  if(location.hash==="#admin"&&ME.role==="admin")return viewAdmin();
+  if(location.hash==="#pin")return viewPin();
+  return viewHome();
+}
+window.addEventListener("hashchange",route);
+
+/* ---------- Login ---------- */
+async function viewLogin(err){
+  $("#who").textContent="";
+  $("#app").innerHTML=`<div class="card"><h2>${t("login")}</h2>
+    <label>${t("nickname")}</label><select id="name"><option value="">${t("loading")}</option></select>
+    <label>${t("pin6")}</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
+    <button class="btn" id="go">${t("login")}</button>
+    <div class="row" style="margin-top:12px;justify-content:space-between"><span class="muted">${t("remember")}</span><button class="sm" id="forgot">${t("forgot")}</button></div>
+    <div id="msg">${err?`<div class="err">${esc(err.message)}</div>`:""}</div></div>`;
+  try{const r=await api("staffNames");const last=store.get("lastName");
+    $("#name").innerHTML=`<option value="">${t("choose")}</option>`+r.names.map(n=>`<option ${n===last?"selected":""}>${esc(n)}</option>`).join("")}
+  catch(e){showErr($("#msg"),e)}
+  $("#go").onclick=async()=>{const name=$("#name").value,pin=$("#pin").value;
+    if(!name||!pin)return showErr($("#msg"),t("pickNamePin"));
+    busy($("#go"),true,t("loggingIn"));
+    try{const r=await api("login",{name,pin});store.set("token",r.token);store.set("lastName",name);ME=r;route()}
+    catch(e){showErr($("#msg"),e);busy($("#go"),false,t("login"))}};
+  $("#forgot").onclick=async()=>{const name=$("#name").value;if(!name)return showErr($("#msg"),t("pickName"));
+    try{await api("forgotPin",{name});$("#msg").innerHTML=`<div class="card ok">${t("pinSent")}</div>`}catch(e){showErr($("#msg"),e)}};
+}
+
+/* ---------- Home ---------- */
+function viewHome(){
+  CURRENT_REDRAW=viewHome;
+  $("#app").innerHTML=`<div class="card"><h2>${esc(t("hello",ME.name))}</h2>
+    <p class="muted" style="margin:0">${t("scanHint")}</p>
+    <label>${t("orType")}</label><input id="cid" placeholder="${t("carIdPh")}">
+    <button class="btn" id="open">${t("openCar")}</button></div>
+    ${ME.defaultPin?`<div class="card warn">${t("defaultPinWarn")}</div>`:""}
+    <div class="card">${ME.role==="admin"?`<button class="btn sec" onclick="location.hash='admin'">${t("adminBtn")}</button>`:""}
+    <button class="btn sec" onclick="location.hash='pin'">${t("changePin")}</button>
+    <button class="btn sec" id="out">${t("logout")}</button></div>`;
+  $("#open").onclick=()=>{const v=$("#cid").value.trim();if(v)location.href=carUrl(v)};
+  $("#out").onclick=()=>{store.set("token",null);ME=null;route()};
+}
+
+function viewPin(){
+  CURRENT_REDRAW=viewPin;
+  $("#app").innerHTML=`<div class="card"><h2>${t("changePin")}</h2>
+    <label>${t("curPin")}</label><input id="o" type="password" inputmode="numeric" maxlength="6">
+    <label>${t("newPin")}</label><input id="n" type="password" inputmode="numeric" maxlength="6">
+    <button class="btn" id="save">${t("save")}</button><button class="btn sec" onclick="location.hash=''">${t("back")}</button><div id="msg"></div></div>`;
+  $("#save").onclick=async()=>{try{await api("changePin",{oldPin:$("#o").value,newPin:$("#n").value});ME.defaultPin=false;
+    $("#msg").innerHTML=`<div class="card ok">${t("pinChanged")}</div>`}catch(e){showErr($("#msg"),e)}};
+}
+
+/* ---------- Car page ---------- */
+async function viewCar(id){
+  CURRENT_REDRAW=()=>viewCar(id);
+  $("#app").innerHTML=`<div class="card">${t("loading")}</div>`;
+  let r;try{r=await api("car",{carId:id})}catch(e){$("#app").innerHTML=`<div class="card"><div class="err">${esc(e.message)}</div><button class="btn sec" onclick="location.href=location.pathname">${t("home")}</button></div>`;return}
+  const c=r.car;
+  let info="";
+  if(c.status==="In")info=c.spot?`<div class="big">${esc(c.spot)}</div><div class="muted">${esc(t("zoneSpot",c.zone))}${c.method==="manual"?" · "+t("manual"):""} · ${esc(c.updated)}</div>`:`<div class="warn">${t("noSpotYet")}</div>`;
+  else info=`<div style="margin-top:6px">${t("keyWith",esc(c.holder),esc(rsText(c.reason)))}</div><div class="muted">${esc(t("outAt",fmtTime(c.outTime),since(c.outTime)))}${c.expected?esc(t("expectBack",c.expected)):""}${c.note?" · "+esc(c.note):""}</div>`;
+  $("#app").innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.id)}</h2>${badge(c.status)}</div>
+    <div class="muted">${esc([c.model,c.color].filter(Boolean).join(" · "))}</div>${info}</div>
+    <div id="act"></div>`;
+  if(c.status==="In")stepBorrow(c);else stepReturnStart(c,r.occupied);
+}
+
+function stepBorrow(c){
+  let reason="";
+  const all=CONFIG.SHORT_REASONS.concat(CONFIG.LONG_REASONS);
+  $("#act").innerHTML=`<div class="card"><h3>${t("borrowTitle")}</h3><div class="row" id="rs">${all.map(x=>`<button class="chip" data-r="${esc(x)}">${esc(rsText(x))}</button>`).join("")}</div>
+    <div id="extra"></div><button class="btn" id="go" disabled>${t("borrowBtn")}</button><div id="msg"></div></div>`;
+  $("#rs").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{reason=b.dataset.r;
+    $("#rs").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));
+    $("#extra").innerHTML=CONFIG.LONG_REASONS.includes(reason)?`<label>${t("noteLbl")}</label><input id="note"><label>${t("expLbl")}</label><input id="exp" type="date">`:"";
+    $("#go").disabled=false});
+  $("#go").onclick=async()=>{const d={carId:c.id,reason};
+    if(CONFIG.LONG_REASONS.includes(reason)){d.note=$("#note").value.trim();d.expected=$("#exp").value;if(!d.note||!d.expected)return showErr($("#msg"),t("needLong"))}
+    busy($("#go"),true,t("working"));
+    try{await api("borrow",d);$("#act").innerHTML=`<div class="card ok"><h2>${t("borrowed")}</h2>${t("borrowedMsg")}</div>`;
+      setTimeout(()=>viewCar(c.id),1800)}
+    catch(e){showErr($("#msg"),e);busy($("#go"),false,t("borrowBtn"))}};
+}
+
+function stepReturnStart(c,occ){
+  $("#act").innerHTML=`<div class="card"><h3>${t("returnTitle")}</h3><p class="muted" style="margin-top:0">${t("returnHint")}</p>
+    <button class="btn green" id="go">${t("returnBtn")}</button><div id="msg"></div></div>`;
+  $("#go").onclick=()=>{busy($("#go"),true,t("locating"));
+    if(!navigator.geolocation)return pickZone(c,occ,"manual",t("noGeo"));
+    navigator.geolocation.getCurrentPosition(p=>{
+      const pt={lat:p.coords.latitude,lng:p.coords.longitude};
+      const z=detectZone(pt);
+      if(z)return pickSpot(c,occ,z,"gps",pt);
+      $("#act").innerHTML=`<div class="card"><div class="err">${esc(t("outside",Math.round(p.coords.accuracy)))}</div>
+        <button class="btn" id="retry">${t("retry")}</button><button class="btn sec" id="man">${t("manualBtn")}</button>
+        <p class="muted">${t("manualNote")}</p></div>`;
+      $("#retry").onclick=()=>stepReturnStart(c,occ);$("#man").onclick=()=>pickZone(c,occ,"gps_outside");
+    },()=>pickZone(c,occ,"manual",t("geoDenied")),{enableHighAccuracy:true,timeout:12000,maximumAge:0});
+  };
+}
+function pickZone(c,occ,method,why){
+  const zs=Object.keys(CONFIG.SPOTS);
+  if(zs.length===1)return pickSpot(c,occ,zs[0],method,null,why);
+  $("#act").innerHTML=`<div class="card">${why?`<p class="muted">${esc(t("pickZoneWhy",why))}</p>`:""}<h3>${t("whichZone")}</h3>
+    <div class="row">${zs.map(z=>`<button class="chip" data-z="${z}">${z}</button>`).join("")}</div></div>`;
+  $("#act").querySelectorAll(".chip").forEach(b=>b.onclick=()=>pickSpot(c,occ,b.dataset.z,method));
+}
+function spotGrid(zone,cell){
+  return '<div class="cols">'+CONFIG.SPOTS[zone].map(r=>`<div class="col"><div class="h">${esc(L().rows[r.label]||r.label)}</div>`+Object.keys(r.spots).reverse().map(cell).join("")+"</div>").join("")+"</div>";
+}
+function pickSpot(c,occ,zone,method,pt,why){
+  const near=pt?nearestSpot(pt,zone):null;
+  const grid=spotGrid(zone,id=>{const tk=occ[id]&&occ[id]!==c.id;
+    return `<button class="spot ${tk?"taken":""} ${id===near?"near":""}" data-s="${id}">${id}${tk?`<small>${esc(occ[id])}</small>`:""}</button>`});
+  $("#act").innerHTML=`<div class="card"><h3>${esc(t("spotTitle",zone))}</h3>
+    <p class="muted" style="margin-top:0">${method==="gps"?esc(t("gpsSays",zone)):esc(why?t("pickZoneWhy",why):t("manualPick"))}${near?t("nearHint"):""}${t("lookGround")}</p>
+    ${grid}<div id="msg"></div></div>`;
+  $("#act").querySelectorAll(".spot").forEach(b=>b.onclick=()=>confirmSpot(c,zone,b.dataset.s,method,occ[b.dataset.s]&&occ[b.dataset.s]!==c.id?occ[b.dataset.s]:null));
+}
+function confirmSpot(c,zone,spot,method,taken){
+  $("#modal").innerHTML=`<div class="modal"><div><h2>${esc(t("confirmSpot",spot))}</h2>
+    ${taken?`<div class="err">${t("takenWarn",esc(spot),esc(taken))}</div>`:""}
+    <button class="btn green" id="yes">${t("confirm")}</button><button class="btn sec" id="no">${t("another")}</button><div id="m2"></div></div></div>`;
+  $("#no").onclick=()=>$("#modal").innerHTML="";
+  $("#yes").onclick=async()=>{busy($("#yes"),true,t("saving"));
+    try{const r=await api("giveBack",{carId:c.id,zone,spot,method,force:!!taken});
+      if(r.conflict){$("#m2").innerHTML=`<div class="err">${esc(t("justTaken",spot,r.conflict))}</div>`;busy($("#yes"),false,t("confirmOverwrite"));taken=r.conflict;return}
+      $("#modal").innerHTML="";
+      $("#act").innerHTML=`<div class="card ok"><h2>${esc(t("returned",spot))}</h2>${t("returnedMsg")}</div>`;
+      setTimeout(()=>viewCar(c.id),2200)}
+    catch(e){showErr($("#m2"),e);busy($("#yes"),false,t("confirm"))}};
+}
+
+/* ---------- GPS ---------- */
+function toXY(p,o){const R=6371000,k=Math.PI/180;return[(p[1]-o[1])*k*R*Math.cos(o[0]*k),(p[0]-o[0])*k*R]}
+function inPoly(pt,poly){const P=toXY([pt.lat,pt.lng],poly[0]),V=poly.map(v=>toXY(v,poly[0]));let c=false;
+  for(let i=0,j=V.length-1;i<V.length;j=i++){const[xi,yi]=V[i],[xj,yj]=V[j];if((yi>P[1])!==(yj>P[1])&&P[0]<(xj-xi)*(P[1]-yi)/(yj-yi)+xi)c=!c}return c}
+function detectZone(pt){return Object.keys(CONFIG.ZONES).find(z=>inPoly(pt,CONFIG.ZONES[z]))||null}
+function nearestSpot(pt,zone){let best=null,bd=1e9;(CONFIG.SPOTS[zone]||[]).forEach(r=>Object.entries(r.spots).forEach(([id,p])=>{const[x,y]=toXY(p,[pt.lat,pt.lng]);const d=Math.hypot(x,y);if(d<bd){bd=d;best=id}}));return best}
+
+/* ---------- Admin ---------- */
+let ADM={data:null,tab:"cars",filter:"all",q:""};
+async function viewAdmin(){
+  CURRENT_REDRAW=()=>ADM.data?renderAdmin():viewAdmin();
+  $("#app").innerHTML=`<div class="card">${t("loading")}</div>`;
+  try{ADM.data=await api("dashboard")}catch(e){$("#app").innerHTML=`<div class="card"><div class="err">${esc(e.message)}</div></div>`;return}
+  renderAdmin();
+}
+function alertText(a){return t("al."+a.type,a.n)}
+function renderAdmin(){
+  const d=ADM.data,cars=d.cars;
+  const n=s=>cars.filter(c=>c.status===s).length;
+  const tabs=[["cars",t("tabCars")],["map",t("tabMap")],["staff",t("tabStaff")],["qr",t("tabQr")]];
+  let body="";
+  if(ADM.tab==="cars"){
+    const list=cars.filter(c=>(ADM.filter==="all"||c.status===ADM.filter)&&(!ADM.q||(c.id+c.model+c.holder+c.spot).toUpperCase().includes(ADM.q.toUpperCase())));
+    body=`<div class="card"><div class="row">${[["all",t("all")],["In",t("statusIn")],["Out",t("statusOut")],["Loaned",t("statusLoaned")]].map(([f,lbl])=>`<button class="chip ${ADM.filter===f?"on":""}" data-f="${f}">${lbl}</button>`).join("")}</div>
+      <input id="q" placeholder="${t("searchPh")}" value="${esc(ADM.q)}">
+      <table style="margin-top:10px"><tr><th>${t("colCar")}</th><th>${t("colStatus")}</th><th>${t("colWhere")}</th><th>${t("colTime")}</th></tr>
+      ${list.map(c=>`<tr class="click" data-c="${esc(c.id)}"><td><b>${esc(c.id)}</b><div class="muted">${esc(c.model)}</div></td><td>${badge(c.status)}</td>
+        <td>${c.status==="In"?(c.spot?esc(c.spot)+(c.method==="manual"?` <span class="muted">${t("manual")}</span>`:c.method==="gps_outside"?` <span class="bad">${t("gpsOutside")}</span>`:""):`<span class="warn">${t("noSpot")}</span>`):"🔑 "+esc(c.holder)+'<div class="muted">'+esc(rsText(c.reason))+(c.note?" · "+esc(c.note):"")+"</div>"}</td>
+        <td class="muted">${c.status==="In"?esc(c.updated):since(c.outTime)+(c.expected?"<br>"+esc(t("expShort",c.expected)):"")}</td></tr>`).join("")||`<tr><td class="muted">${t("none")}</td></tr>`}
+      </table></div>
+      <div class="card"><h3>${t("addCar")}</h3><div class="row"><input id="nid" placeholder="${t("carIdFull")}" style="flex:2"><input id="nmodel" placeholder="${t("model")}" style="flex:1"><input id="ncolor" placeholder="${t("colour")}" style="flex:1"></div>
+      <button class="btn sec" id="addcar">${t("save")}</button><div id="cmsg"></div></div>`;
+  }else if(ADM.tab==="map"){
+    body=Object.keys(CONFIG.SPOTS).map(z=>{
+      const grid=spotGrid(z,id=>{const cid=d.occupied[id];return`<button class="spot ${cid?"mine":""}" ${cid?`data-c="${esc(cid)}"`:""}>${id}${cid?`<small style="color:#fff">${esc(cid)}</small>`:""}</button>`});
+      const total=CONFIG.SPOTS[z].reduce((a,r)=>a+Object.keys(r.spots).length,0),used=CONFIG.SPOTS[z].reduce((a,r)=>a+Object.keys(r.spots).filter(id=>d.occupied[id]).length,0);
+      return`<div class="card"><h3>${esc(t("zoneUsed",z,used,total))}</h3>${grid}</div>`}).join("");
+  }else if(ADM.tab==="staff"){
+    body=`<div class="card"><table><tr><th>${t("colName")}</th><th>${t("colEmail")}</th><th>${t("colRole")}</th><th></th></tr>
+      ${d.staff.map(s=>`<tr><td><b>${esc(s.name)}</b>${s.active?"":` <span class="bad">${t("disabled")}</span>`}${s.defaultPin?`<div class="muted">${t("defaultPin")}</div>`:""}</td><td class="muted">${esc(s.email)}</td><td>${s.role==="admin"?t("roleAdmin"):t("roleStaff")}</td>
+        <td><div class="row"><button class="sm" data-edit="${esc(s.name)}">${t("edit")}</button><button class="sm" data-reset="${esc(s.name)}">${t("resetPin")}</button><button class="sm" data-tog="${esc(s.name)}">${s.active?t("disable"):t("enable")}</button></div></td></tr>`).join("")}</table></div>
+      <div class="card"><h3>${t("addStaff")}</h3><input id="sname" placeholder="${t("colName")}"><input id="semail" placeholder="${t("emailPh")}">
+      <select id="srole"><option value="staff">${t("roleStaff")}</option><option value="admin">${t("roleAdmin")}</option></select>
+      <button class="btn sec" id="addstaff">${t("save")}</button><div id="smsg"></div><p class="muted">${t("newStaffPin")}</p></div>`;
+  }else{
+    body=`<div class="card noprint"><p class="muted" style="margin-top:0">${t("qrHint")}</p><button class="btn" onclick="window.print()">${t("print")}</button></div>
+      <div class="qrgrid">${cars.map(c=>`<div class="qr"><div id="qr-${esc(c.id)}"></div>${esc(c.id)}<div class="muted" style="font-weight:400">${esc(c.model)}</div></div>`).join("")}</div>`;
+  }
+  $("#app").innerHTML=`<div class="noprint"><div class="stats"><div class="stat"><b>${n("In")}</b><span>${t("statusIn")}</span></div><div class="stat"><b>${n("Out")}</b><span>${t("statusOut")}</span></div>
+    <div class="stat"><b>${n("Loaned")}</b><span>${t("statusLoaned")}</span></div><div class="stat"><b class="${d.alerts.length?"bad":"ok"}">${d.alerts.length}</b><span>${t("alertsN")}</span></div></div>
+    ${d.alerts.length?`<div class="card" style="margin-top:12px"><h3 class="bad">${t("alertsTitle")}</h3><table>${d.alerts.map(a=>`<tr ${a.car?`class="click" data-c="${esc(a.car)}"`:""}><td><b>${esc(a.car||"—")}</b></td><td>${esc(alertText(a))}</td><td>${esc(a.who)}</td></tr>`).join("")}</table></div>`:`<div class="card ok" style="margin-top:12px">${t("noAlerts")}</div>`}
+    <div class="tabs">${tabs.map(([k,lbl])=>`<button class="chip ${ADM.tab===k?"on":""}" data-tab="${k}">${lbl}</button>`).join("")}<button class="chip" id="refresh">${t("refresh")}</button><button class="chip" onclick="location.hash=''">${t("home")}</button></div></div>${body}`;
+  const A=$("#app");
+  A.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ADM.tab=b.dataset.tab;renderAdmin()});
+  $("#refresh").onclick=viewAdmin;
+  A.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ADM.filter=b.dataset.f;renderAdmin()});
+  A.querySelectorAll("[data-c]").forEach(r=>r.onclick=()=>showHistory(r.dataset.c));
+  if($("#q"))$("#q").oninput=e=>{ADM.q=e.target.value;const p=e.target.selectionStart;renderAdmin();$("#q").focus();$("#q").setSelectionRange(p,p)};
+  if($("#addcar"))$("#addcar").onclick=async()=>{try{await api("saveCar",{id:$("#nid").value,model:$("#nmodel").value,color:$("#ncolor").value});viewAdmin()}catch(e){showErr($("#cmsg"),e)}};
+  if($("#addstaff"))$("#addstaff").onclick=async()=>{try{await api("saveStaff",{name:$("#sname").value,email:$("#semail").value,role:$("#srole").value});ADM.tab="staff";viewAdmin()}catch(e){showErr($("#smsg"),e)}};
+  A.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{const s=d.staff.find(x=>x.name===b.dataset.edit);$("#sname").value=s.name;$("#semail").value=s.email;$("#srole").value=s.role;$("#sname").scrollIntoView()});
+  A.querySelectorAll("[data-reset]").forEach(b=>b.onclick=async()=>{try{await api("adminResetPin",{name:b.dataset.reset});viewAdmin()}catch(e){alertBox(e.message)}});
+  A.querySelectorAll("[data-tog]").forEach(b=>b.onclick=async()=>{const s=d.staff.find(x=>x.name===b.dataset.tog);
+    try{await api("saveStaff",{name:s.name,email:s.email,role:s.role,active:!s.active});viewAdmin()}catch(e){alertBox(e.message)}});
+  if(ADM.tab==="qr"&&window.QRCode)cars.forEach(c=>new QRCode(document.getElementById("qr-"+c.id),{text:carUrl(c.id),width:120,height:120,correctLevel:QRCode.CorrectLevel.M}));
+}
+function alertBox(msg){$("#modal").innerHTML=`<div class="modal"><div><div class="err">${esc(msg)}</div><button class="btn sec" onclick="$('#modal').innerHTML=''">${t("close")}</button></div></div>`}
+function methodText(m){return m==="manual"?t("manual"):m==="gps_outside"?t("gpsOutside"):""}
+async function showHistory(id){
+  const c=ADM.data.cars.find(x=>x.id===id);
+  $("#modal").innerHTML=`<div class="modal"><div><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(id)}</h2><button class="sm" id="x">${t("close")}</button></div><div id="h" class="muted">${t("loading")}</div></div></div>`;
+  $("#x").onclick=()=>$("#modal").innerHTML="";
+  try{const r=await api("history",{carId:id});
+    $("#h").innerHTML=`<table><tr><th>${t("colWhen")}</th><th>${t("colAction")}</th><th>${t("colWho")}</th><th>${t("colDetail")}</th></tr>${r.logs.map(l=>`<tr><td class="muted">${esc(l.time)}</td><td>${esc(L().actions[l.action]||l.action)}</td><td>${esc(l.who)}</td><td>${esc([rsText(l.reason),l.note,l.spot,methodText(l.method)].filter(Boolean).join(" · "))}</td></tr>`).join("")||`<tr><td>${t("noHistory")}</td></tr>`}</table>
+    ${c?`<div class="row" style="margin-top:12px"><button class="sm" id="off">${t("deactivate")}</button></div>`:""}`;
+    if($("#off"))$("#off").onclick=async()=>{try{await api("saveCar",{id:c.id,model:c.model,color:c.color,active:false});viewAdmin()}catch(e){showErr($("#h"),e)}};
+  }catch(e){showErr($("#h"),e)}
+}
+
+route();
+</script>
+</body>
+</html>
