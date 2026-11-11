@@ -88,7 +88,7 @@ const I18N = {
     keyWith:"Key is with <b>{0}</b> · {1}", outAt:"Out {0} ({1})", expectBack:" · expected back {0}",
     borrowTitle:"Borrow this car", borrowBtn:"Borrow and take the key", working:"Working…",
     noteLbl:"Note (where / what for)", expLbl:"Expected return date", needLong:"Please fill in the note and expected return date",
-    borrowed:"✓ Borrowed", borrowedMsg:"You can take the key. When you are back and parked, scan the key tag again <b>next to the car</b>.",
+    borrowed:"✓ Borrowed", borrowedMsg:"When you are back and parked, open <b>My keys</b> on the home page <b>next to the car</b> and press Return.",
     returnTitle:"Return", returnHint:"Park the car, then <b>stand next to it</b> and press the button.", returnBtn:"I'm next to the car, start return",
     locating:"Getting location…", noGeo:"This phone can't get a location", geoDenied:"Couldn't get a location (location off or blocked)",
     outside:"You don't seem to be in the parking area (GPS accuracy {0} m). Please walk to the car and try again.",
@@ -103,6 +103,7 @@ const I18N = {
     statusIn:"In stock", statusOut:"Out", statusLoaned:"Loaned",
     reasons:{"Test drive":"Test drive","Car wash":"Car wash","Service":"Service","Delivery":"Delivery","Roadshow":"Roadshow","Other":"Other"},
     actions:{"Borrow":"Borrowed","Return":"Returned","Spot overwritten":"Spot overwritten","Transfer":"Key transferred"},
+    goTo:"Take the key and go to spot {0} (red circle).", done:"Done",
     myKeys:"My keys", myKeysNone:"You don't have any keys right now.", returnIt:"Return",
     deskQr:"Desk QR", deskQrTitle:"Scan before taking a key", deskQrHint:"Put this on the key desk. Staff scan it, pick the car on the key board and borrow it before taking the key.",
     carQrs:"Key-tag QR codes (optional)",
@@ -110,7 +111,7 @@ const I18N = {
     keyAt:"🔑 {0}", parkedAt:"Parked at {0}",
     transferTitle:"Key transfer", transferHint:"The system shows the key with <b>{0}</b>. If you now have the key in your hand, take it over here.",
     transferReason:"What are you using it for?", sameReason:"Same ({0})", transferBtn:"I have the key now", transferred:"✓ Key is now with you",
-    transferredMsg:"When you're done, park the car and scan the key tag <b>next to the car</b> to return it.", orReturn:"Or, if the car is already parked back:",
+    transferredMsg:"When you're done, park the car, then open <b>My keys</b> <b>next to the car</b> and press Return.", orReturn:"Or, if the car is already parked back:",
     all:"All", alertsTitle:"⚠ Alerts", noAlerts:"✓ No alerts", alertsN:"Alerts",
     tabCars:"Cars", tabMap:"Parking", tabStaff:"Staff", tabQr:"Print QR", refresh:"↻ Refresh",
     searchPh:"Search car ID / model / name / spot", colCar:"Car", colStatus:"Status", colWhere:"Spot / key", colTime:"Time",
@@ -144,7 +145,7 @@ const I18N = {
     keyWith:"钥匙在 <b>{0}</b> 手上 · {1}", outAt:"借出 {0}（{1}）", expectBack:" · 预计 {0} 回来",
     borrowTitle:"借出这辆车", borrowBtn:"借出，拿钥匙", working:"处理中…",
     noteLbl:"备注（去哪里 / 做什么）", expLbl:"预计回来的日期", needLong:"请填备注和预计回来的日期",
-    borrowed:"✓ 已借出", borrowedMsg:"可以拿钥匙了。回来停好车后，<b>在车旁边</b>再扫一次钥匙牌。",
+    borrowed:"✓ 已借出", borrowedMsg:"回来停好车后，<b>在车旁边</b>打开首页的<b>\"我的钥匙\"</b>，按归还。",
     returnTitle:"归还", returnHint:"停好车，<b>站在车旁边</b>再按。", returnBtn:"我在车旁边，开始归还",
     locating:"读取位置中…", noGeo:"这支手机拿不到位置", geoDenied:"拿不到位置（定位没开或被拒绝）",
     outside:"你现在好像不在停车区（GPS 误差 {0} 米）。请走到车旁边再试。",
@@ -159,6 +160,7 @@ const I18N = {
     statusIn:"在店", statusOut:"借出中", statusLoaned:"外借",
     reasons:{"Test drive":"试驾","Car wash":"洗车","Service":"维修","Delivery":"交车","Roadshow":"Roadshow","Other":"其他"},
     actions:{"Borrow":"借出","Return":"归还","Spot overwritten":"车位被覆盖","Transfer":"钥匙转交"},
+    goTo:"拿钥匙，去 {0} 号车位（红圈）。", done:"完成",
     myKeys:"我的钥匙", myKeysNone:"你现在手上没有钥匙。", returnIt:"归还",
     deskQr:"桌上二维码", deskQrTitle:"拿钥匙前先扫", deskQrHint:"放在钥匙桌上。员工扫了之后，在钥匙板选车、按借出，才拿钥匙。",
     carQrs:"钥匙牌二维码（可选）",
@@ -166,7 +168,7 @@ const I18N = {
     keyAt:"🔑 {0}", parkedAt:"停在 {0}",
     transferTitle:"钥匙转交", transferHint:"系统显示钥匙在 <b>{0}</b> 手上。如果钥匙现在在你手上，在这里接手。",
     transferReason:"你拿来做什么？", sameReason:"一样（{0}）", transferBtn:"钥匙现在在我手上", transferred:"✓ 钥匙已经转到你名下",
-    transferredMsg:"用完后停好车，<b>在车旁边</b>扫钥匙牌归还。", orReturn:"或者，如果车已经停回来了：",
+    transferredMsg:"用完后停好车，<b>在车旁边</b>打开<b>\"我的钥匙\"</b>按归还。", orReturn:"或者，如果车已经停回来了：",
     all:"全部", alertsTitle:"⚠ 异常", noAlerts:"✓ 没有异常", alertsN:"异常",
     tabCars:"车辆", tabMap:"停车场", tabStaff:"员工", tabQr:"打印二维码", refresh:"↻ 刷新",
     searchPh:"搜车辆ID / 车型 / 人名 / 车位", colCar:"车辆", colStatus:"状态", colWhere:"位置 / 钥匙", colTime:"时间",
@@ -315,7 +317,7 @@ async function viewCar(id){
   $("#app").innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.id)}</h2>${badge(c.status)}</div>
     <div class="muted">${esc([c.model,c.color].filter(Boolean).join(" · "))}</div>${info}</div>
     <div id="act"></div>`;
-  if(c.status==="In")stepBorrow(c);
+  if(c.status==="In")stepBorrow(c,r.occupied);
   else if(String(c.holder).toUpperCase()===String(ME.name).toUpperCase())stepReturnStart(c,r.occupied);
   else stepTransfer(c,r.occupied);
 }
@@ -337,7 +339,7 @@ function stepTransfer(c,occ){
   $("#retbtn").onclick=()=>stepReturnStart(c,occ);
 }
 
-function stepBorrow(c){
+function stepBorrow(c,occ){
   let reason="";
   const all=CONFIG.SHORT_REASONS.concat(CONFIG.LONG_REASONS);
   $("#act").innerHTML=`<div class="card"><h3>${t("borrowTitle")}</h3><div class="row" id="rs">${all.map(x=>`<button class="chip" data-r="${esc(x)}">${esc(rsText(x))}</button>`).join("")}</div>
@@ -349,8 +351,12 @@ function stepBorrow(c){
   $("#go").onclick=async()=>{const d={carId:c.id,reason};
     if(CONFIG.LONG_REASONS.includes(reason)){d.note=$("#note").value.trim();d.expected=$("#exp").value;if(!d.note||!d.expected)return showErr($("#msg"),t("needLong"))}
     busy($("#go"),true,t("working"));
-    try{await api("borrow",d);$("#act").innerHTML=`<div class="card ok"><h2>${t("borrowed")}</h2>${t("borrowedMsg")}</div>`;
-      setTimeout(()=>viewCar(c.id),1800)}
+    try{await api("borrow",d);
+      if(c.spot&&CONFIG.ZONES[c.zone]){
+        $("#app").innerHTML=`<div class="card ok"><h2>${t("borrowed")}</h2><div class="big">${esc(c.id)} → ${esc(c.spot)}</div>
+          <p style="margin:6px 0 10px">${esc(t("goTo",c.spot))}</p>${zoneMap(c.zone,{occupied:occ||{},highlight:c.spot,max:420})}
+          <p class="muted">${t("borrowedMsg")}</p><button class="btn" onclick="location.href=location.pathname">${t("done")}</button></div>`;
+      }else{$("#act").innerHTML=`<div class="card ok"><h2>${t("borrowed")}</h2>${t("borrowedMsg")}</div>`;setTimeout(()=>viewCar(c.id),1800)}}
     catch(e){showErr($("#msg"),e);busy($("#go"),false,t("borrowBtn"))}};
 }
 
