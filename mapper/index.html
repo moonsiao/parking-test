@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parking Mapper · 车位画图工具</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;color:#222}
+#wrap{display:flex;height:100%}
+#side{width:340px;overflow:auto;background:#f4f5f7;border-right:1px solid #ddd;padding:12px}
+#map{flex:1}
+h1{font-size:17px;margin:0 0 4px}h3{font-size:14px;margin:14px 0 6px}
+.muted{color:#777;font-size:12px}
+.card{background:#fff;border-radius:8px;padding:10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+button{padding:7px 10px;border:1px solid #1d2b53;background:#fff;color:#1d2b53;border-radius:6px;cursor:pointer;font-size:13px}
+button.pri{background:#1d2b53;color:#fff}button.red{border-color:#c62828;color:#c62828}
+button:disabled{opacity:.4}
+input,select{padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px;width:100%}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.zone{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.zone.on{background:#1d2b53;color:#fff}
+.mode{background:#fff3cd;border:1px solid #e8c547;padding:8px;border-radius:6px;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}td{padding:4px;border-bottom:1px solid #eee}
+textarea{width:100%;height:120px;font-family:monospace;font-size:11px}
+.lbl{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="side">
+  <h1>Parking Mapper · 车位画图</h1>
+  <div class="muted">Draw zones and rows on the satellite map. 在卫星图上画区和排。</div>
+
+  <h3>1. Zones · 区</h3>
+  <div class="card">
+    <div id="zones"></div>
+    <div class="row"><input id="zname" placeholder="New zone name 新区名 (e.g. B, C1, E)" style="flex:1"><button id="addZone">+ Add</button></div>
+  </div>
+
+  <div id="zoneTools" class="card" style="display:none">
+    <b id="ztitle"></b>
+    <div class="row"><button id="drawZone">Draw corners 画区的角</button><button id="clearZone" class="red">Clear corners</button></div>
+    <div class="row"><button id="addRow" class="pri">+ Add row 加一排</button><button id="delZone" class="red">Delete zone</button></div>
+    <div id="modeBox"></div>
+    <h3>Rows · 排</h3>
+    <table id="rows"></table>
+  </div>
+
+  <h3>3. Export · 导出</h3>
+  <div class="card">
+    <div class="muted">Copy this and send it to Claude. 复制后贴给 Claude。</div>
+    <textarea id="out" readonly></textarea>
+    <div class="row"><button id="copy" class="pri">Copy 复制</button><span id="copyMsg" class="muted"></span></div>
+    <details style="margin-top:8px"><summary class="muted">Import 导入</summary>
+      <textarea id="inp" placeholder="Paste JSON here"></textarea><button id="doImport">Import</button></details>
+  </div>
+  <div class="card muted">
+    <b>How · 怎么用</b><br>
+    1. Add a zone → <b>Draw corners</b>: click the corners in order, then <b>Finish</b>.<br>
+    2. <b>Add row</b>: click the <b>first</b> spot, then the <b>last</b> spot, fill in count + start number.<br>
+    3. Spots are spaced evenly between them. Wrong? Delete the row and redo.<br>
+    先加区 → 点"画区的角"按顺序点每个角 → Finish。再"加一排"：点第一个车位、最后一个车位，填数量和起始号码。
+  </div>
+</div>
+<div id="map"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const KEY="parkingMapper_v1";
+// Starting data: zone A from the live system
+let D={ZONES:{A:[[5.909240,116.049955],[5.909181,116.050226],[5.908949,116.050164],[5.909002,116.049893]]},
+  SPOTS:{A:[
+    {label:"left",spots:{A1:[5.90901474,116.04993595],A2:[5.90904409,116.04993595],A3:[5.90906410,116.04994333],A4:[5.90908544,116.04994534],A5:[5.90910812,116.04994937]}},
+    {label:"middle",spots:{A6:[5.90904009,116.05002715],A7:[5.90906210,116.05002983],A8:[5.90908344,116.05003453],A9:[5.90910745,116.05003989],A10:[5.90912613,116.05004525],A11:[5.90914881,116.05004794],A12:[5.90916948,116.05005598]}},
+    {label:"right",spots:{A13:[5.90903008,116.05006738],A14:[5.90904876,116.05007275],A15:[5.90907344,116.05007476],A16:[5.90909678,116.05008213],A17:[5.90911546,116.05008415],A18:[5.90914214,116.05009018],A19:[5.90916148,116.05010024]}}]},
+  OUTSIDE:{}};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.ZONES)D=Object.assign({OUTSIDE:{}},s)}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}draw()};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const r6=n=>Math.round(n*1e8)/1e8;
+
+const map=L.map("map",{maxZoom:21}).setView([5.9092,116.0507],19);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:21,maxNativeZoom:19,attribution:"Imagery © Esri, Maxar, Earthstar Geographics"}).addTo(map);
+const layer=L.layerGroup().addTo(map);
+let cur=null,mode=null,tmp=[],tmpLayer=L.layerGroup().addTo(map);
+
+function draw(){
+  layer.clearLayers();
+  Object.entries(D.ZONES).forEach(([z,poly])=>{
+    if(poly.length>=3)L.polygon(poly,{color:z===cur?"#ffeb3b":"#ff5252",weight:z===cur?3:2,fillOpacity:.08}).addTo(layer)
+      .bindTooltip(z+(D.OUTSIDE[z]?" (outside)":""),{permanent:true,direction:"center",className:"lbl"});
+    (D.SPOTS[z]||[]).forEach(row=>Object.entries(row.spots).forEach(([id,p])=>{
+      L.circleMarker(p,{radius:6,color:"#fff",weight:1.5,fillColor:z===cur?"#2979ff":"#90a4ae",fillOpacity:.95}).addTo(layer)
+        .bindTooltip(id,{permanent:map.getZoom()>=20,direction:"top",offset:[0,-4],className:"lbl"});
+    }));
+  });
+  // sidebar
+  $("#zones").innerHTML=Object.keys(D.ZONES).map(z=>{const n=(D.SPOTS[z]||[]).reduce((a,r)=>a+Object.keys(r.spots).length,0);
+    return `<div class="zone ${z===cur?"on":""}" data-z="${esc(z)}"><span><b>${esc(z)}</b> · ${n} spots${D.OUTSIDE[z]?" · outside":""}</span><span>${D.ZONES[z].length>=3?"✓":"<i>no corners</i>"}</span></div>`}).join("")||'<div class="muted">No zones yet</div>';
+  document.querySelectorAll(".zone").forEach(e=>e.onclick=()=>{cur=e.dataset.z;setMode(null);draw()});
+  $("#zoneTools").style.display=cur?"block":"none";
+  if(cur){
+    $("#ztitle").innerHTML=`Zone ${esc(cur)} <label style="font-weight:400;margin-left:8px"><input type="checkbox" id="outside" style="width:auto" ${D.OUTSIDE[cur]?"checked":""}> outside fence 围栏外</label>`;
+    $("#outside").onchange=e=>{D.OUTSIDE[cur]=e.target.checked;save()};
+    const rows=D.SPOTS[cur]||[];
+    $("#rows").innerHTML=rows.map((r,i)=>{const ids=Object.keys(r.spots);return `<tr><td><b>${esc(r.label)}</b></td><td>${esc(ids[0])} – ${esc(ids[ids.length-1])} (${ids.length})</td><td><button class="red" data-del="${i}">✕</button></td></tr>`}).join("")||'<tr><td class="muted">No rows yet</td></tr>';
+    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.del,1);save()});
+  }
+  $("#out").value=JSON.stringify(D);
+}
+map.on("zoomend",draw);
+
+function setMode(m){
+  mode=m;tmp=[];tmpLayer.clearLayers();
+  const box=$("#modeBox");
+  if(m==="zone")box.innerHTML=`<div class="mode">Click the corners of zone <b>${esc(cur)}</b> in order. 按顺序点每个角。<div class="row"><button id="undo">Undo</button><button id="fin" class="pri">Finish</button><button id="cancel">Cancel</button></div></div>`;
+  else if(m==="row")box.innerHTML=`<div class="mode" id="rowBox">Click the <b>first</b> spot of the row. 点这排<b>第一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div></div>`;
+  else box.innerHTML="";
+  if($("#cancel"))$("#cancel").onclick=()=>setMode(null);
+  if($("#undo"))$("#undo").onclick=()=>{tmp.pop();drawTmp()};
+  if($("#fin"))$("#fin").onclick=()=>{if(tmp.length<3)return alertMsg("Need at least 3 corners");D.ZONES[cur]=tmp.map(p=>[r6(p[0]),r6(p[1])]);setMode(null);save()};
+}
+function alertMsg(m){$("#modeBox").insertAdjacentHTML("beforeend",`<div class="muted" style="color:#c62828">${esc(m)}</div>`)}
+function drawTmp(){tmpLayer.clearLayers();if(mode==="zone"&&tmp.length)L.polyline(tmp.concat(tmp.length>2?[tmp[0]]:[]),{color:"#ffeb3b",dashArray:"4 4"}).addTo(tmpLayer);
+  tmp.forEach(p=>L.circleMarker(p,{radius:5,color:"#ffeb3b",fillOpacity:1}).addTo(tmpLayer))}
+function nextNumber(z){let max=0;(D.SPOTS[z]||[]).forEach(r=>Object.keys(r.spots).forEach(id=>{const n=parseInt(id.slice(z.length));if(n>max)max=n}));return max+1}
+
+map.on("click",e=>{
+  const p=[e.latlng.lat,e.latlng.lng];
+  if(mode==="zone"){tmp.push(p);drawTmp();return}
+  if(mode==="row"){
+    tmp.push(p);drawTmp();
+    if(tmp.length===1){$("#rowBox").innerHTML=`Now click the <b>last</b> spot of the row. 再点这排<b>最后一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div>`;$("#cancel").onclick=()=>setMode(null)}
+    if(tmp.length===2){L.polyline(tmp,{color:"#2979ff"}).addTo(tmpLayer);const n=nextNumber(cur);
+      $("#rowBox").innerHTML=`<div class="row"><label style="flex:1">Spots in row 车位数<input id="cnt" type="number" min="1" value="8"></label><label style="flex:1">Start no. 起始号码<input id="st" type="number" min="1" value="${n}"></label></div>
+        <div class="row"><label style="flex:1">Row name 排名<input id="rl" value="Row ${(D.SPOTS[cur]||[]).length+1}"></label></div>
+        <div class="row"><button id="ok" class="pri">Create 建立</button><button id="cancel">Cancel</button></div>`;
+      $("#cancel").onclick=()=>setMode(null);
+      $("#ok").onclick=()=>{const cnt=Math.max(1,parseInt($("#cnt").value)||1),st=Math.max(1,parseInt($("#st").value)||1),[a,b]=tmp,spots={};
+        for(let i=0;i<cnt;i++){const f=cnt===1?0:i/(cnt-1);spots[cur+(st+i)]=[r6(a[0]+(b[0]-a[0])*f),r6(a[1]+(b[1]-a[1])*f)]}
+        const dup=Object.keys(spots).find(id=>(D.SPOTS[cur]||[]).some(r=>r.spots[id]));
+        if(dup)return alertMsg("Spot "+dup+" already exists. 车位号码重复。");
+        (D.SPOTS[cur]=D.SPOTS[cur]||[]).push({label:$("#rl").value.trim()||("Row "+((D.SPOTS[cur]||[]).length+1)),spots});
+        setMode(null);save()};
+    }
+  }
+});
+
+$("#addZone").onclick=()=>{const z=$("#zname").value.trim().toUpperCase().replace(/\s+/g,"");if(!z)return;if(!D.ZONES[z]){D.ZONES[z]=[];D.SPOTS[z]=[]}cur=z;$("#zname").value="";save();setMode("zone")};
+$("#drawZone").onclick=()=>setMode("zone");
+$("#clearZone").onclick=()=>{D.ZONES[cur]=[];save()};
+$("#addRow").onclick=()=>setMode("row");
+$("#delZone").onclick=e=>{const b=e.target;if(!b.dataset.c){b.dataset.c=1;b.textContent="Click again to delete";return}
+  delete D.ZONES[cur];delete D.SPOTS[cur];delete D.OUTSIDE[cur];cur=null;setMode(null);save()};
+$("#copy").onclick=async()=>{try{await navigator.clipboard.writeText($("#out").value);$("#copyMsg").textContent="Copied ✓"}catch(e){$("#out").select();$("#copyMsg").textContent="Select and copy manually"}};
+$("#doImport").onclick=()=>{try{const s=JSON.parse($("#inp").value);if(!s.ZONES)throw 0;D=Object.assign({OUTSIDE:{}},s);cur=null;save()}catch(e){alertMsg("Bad JSON")}};
+draw();
+</script>
+</body>
+</html>
