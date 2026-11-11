@@ -79,7 +79,7 @@ const I18N = {
     title:"Parking & Key Tracker", loading:"Loading…", login:"Log in", nickname:"Your nickname", choose:"Please choose",
     pin6:"PIN (6 digits)", loggingIn:"Logging in…", remember:"This phone will remember you", forgot:"Forgot PIN",
     pickNamePin:"Choose your nickname and enter your PIN", pickName:"Choose your nickname first", pinSent:"A new PIN has been sent to your Gmail",
-    hello:"Hi, {0}", scanHint:"To borrow or return a car, scan the QR code on the key tag with your phone camera.",
+    hello:"Hi, {0}", scanHint:"Taking a key? Pick the car on the key board and borrow it first. Returning? Open My keys next to the car.",
     orType:"Or type the car ID", carIdPh:"e.g. TD1 or plate number", openCar:"Open this car",
     defaultPinWarn:"You are still using the default PIN (111111). Change it so nobody else can use your name.",
     adminBtn:"Admin dashboard", changePin:"Change PIN", logout:"Log out", curPin:"Current PIN", newPin:"New PIN (6 digits)",
@@ -103,6 +103,9 @@ const I18N = {
     statusIn:"In stock", statusOut:"Out", statusLoaned:"Loaned",
     reasons:{"Test drive":"Test drive","Car wash":"Car wash","Service":"Service","Delivery":"Delivery","Roadshow":"Roadshow","Other":"Other"},
     actions:{"Borrow":"Borrowed","Return":"Returned","Spot overwritten":"Spot overwritten","Transfer":"Key transferred"},
+    myKeys:"My keys", myKeysNone:"You don't have any keys right now.", returnIt:"Return",
+    deskQr:"Desk QR", deskQrTitle:"Scan before taking a key", deskQrHint:"Put this on the key desk. Staff scan it, pick the car on the key board and borrow it before taking the key.",
+    carQrs:"Key-tag QR codes (optional)",
     keyBoard:"Key board", keyBoardHint:"Where every car and key is right now. Tap a car to open it.", boardSearch:"Search plate / model / name",
     keyAt:"🔑 {0}", parkedAt:"Parked at {0}",
     transferTitle:"Key transfer", transferHint:"The system shows the key with <b>{0}</b>. If you now have the key in your hand, take it over here.",
@@ -132,7 +135,7 @@ const I18N = {
     title:"停车 · 钥匙系统", loading:"载入中…", login:"登录", nickname:"你的小名", choose:"请选择",
     pin6:"PIN（6 位数字）", loggingIn:"登录中…", remember:"登录一次，这支手机就会记住你", forgot:"忘记 PIN",
     pickNamePin:"请选小名，输入 PIN", pickName:"先选你的小名", pinSent:"新 PIN 已经寄到你登记的 Gmail",
-    hello:"你好，{0}", scanHint:"借车或还车：用手机相机扫钥匙牌上的二维码。",
+    hello:"你好，{0}", scanHint:"拿钥匙：先在钥匙板选车、按借出。还车：在车旁边打开\"我的钥匙\"。",
     orType:"或者输入车辆ID", carIdPh:"例如 TD1 或车牌", openCar:"打开这辆车",
     defaultPinWarn:"你还在用默认 PIN（111111）。建议改成你自己的，别人就不能用你的名字。",
     adminBtn:"Admin 总控页", changePin:"改 PIN", logout:"登出", curPin:"现在的 PIN", newPin:"新的 PIN（6 位数字）",
@@ -156,6 +159,9 @@ const I18N = {
     statusIn:"在店", statusOut:"借出中", statusLoaned:"外借",
     reasons:{"Test drive":"试驾","Car wash":"洗车","Service":"维修","Delivery":"交车","Roadshow":"Roadshow","Other":"其他"},
     actions:{"Borrow":"借出","Return":"归还","Spot overwritten":"车位被覆盖","Transfer":"钥匙转交"},
+    myKeys:"我的钥匙", myKeysNone:"你现在手上没有钥匙。", returnIt:"归还",
+    deskQr:"桌上二维码", deskQrTitle:"拿钥匙前先扫", deskQrHint:"放在钥匙桌上。员工扫了之后，在钥匙板选车、按借出，才拿钥匙。",
+    carQrs:"钥匙牌二维码（可选）",
     keyBoard:"钥匙板", keyBoardHint:"每辆车和钥匙现在在哪里。点一辆车可以打开它。", boardSearch:"搜车牌 / 车型 / 人名",
     keyAt:"🔑 {0}", parkedAt:"停在 {0}",
     transferTitle:"钥匙转交", transferHint:"系统显示钥匙在 <b>{0}</b> 手上。如果钥匙现在在你手上，在这里接手。",
@@ -253,7 +259,8 @@ async function viewLogin(err){
 /* ---------- Home ---------- */
 function viewHome(){
   CURRENT_REDRAW=viewHome;
-  $("#app").innerHTML=`<div class="card"><h2>${esc(t("hello",ME.name))}</h2>
+  $("#app").innerHTML=`<div class="card" id="mine"><h3>${t("myKeys")}</h3><div class="muted">${t("loading")}</div></div>
+    <div class="card"><h2>${esc(t("hello",ME.name))}</h2>
     <p class="muted" style="margin:0">${t("scanHint")}</p>
     <label>${t("orType")}</label><input id="cid" placeholder="${t("carIdPh")}">
     <button class="btn" id="open">${t("openCar")}</button></div>
@@ -269,8 +276,13 @@ function viewHome(){
 }
 let BOARD=[];
 async function loadBoard(){
-  try{BOARD=(await api("list")).cars;drawBoard()}catch(e){if($("#board"))showErr($("#board"),e)}
+  try{BOARD=(await api("list")).cars;drawBoard();drawMine()}catch(e){if($("#board"))showErr($("#board"),e)}
   if($("#bq"))$("#bq").oninput=drawBoard;
+}
+function drawMine(){
+  const me=String(ME.name).toUpperCase(),mine=BOARD.filter(c=>c.status!=="In"&&String(c.holder).toUpperCase()===me);
+  $("#mine").innerHTML=`<h3>${t("myKeys")}</h3>`+(mine.length?mine.map(c=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee"><div><b>${esc(c.id)}</b> <span class="muted">${esc(c.model)} · ${esc(rsText(c.reason))} · ${since(c.outTime)}</span></div><button class="sm" data-car="${esc(c.id)}" style="background:#0a7d32;color:#fff;border-color:#0a7d32">${t("returnIt")}</button></div>`).join(""):`<div class="muted">${t("myKeysNone")}</div>`);
+  $("#mine").querySelectorAll("[data-car]").forEach(b=>b.onclick=()=>location.href=carUrl(b.dataset.car));
 }
 function drawBoard(){
   const q=($("#bq")?.value||"").toUpperCase();
@@ -469,7 +481,10 @@ function renderAdmin(){
       <select id="srole"><option value="staff">${t("roleStaff")}</option><option value="admin">${t("roleAdmin")}</option></select>
       <button class="btn sec" id="addstaff">${t("save")}</button><div id="smsg"></div><p class="muted">${t("newStaffPin")}</p></div>`;
   }else{
-    body=`<div class="card noprint"><p class="muted" style="margin-top:0">${t("qrHint")}</p><button class="btn" onclick="window.print()">${t("print")}</button></div>
+    body=`<div class="card noprint"><p class="muted" style="margin-top:0">${t("deskQrHint")}</p><button class="btn" onclick="window.print()">${t("print")}</button></div>
+      <div class="card" style="text-align:center;break-after:page"><h2 style="font-size:28px">${t("deskQrTitle")}</h2><div id="qr-desk" style="display:flex;justify-content:center;margin:12px 0"></div>
+        <div style="font-size:18px;font-weight:700">Scan before taking a key · 拿钥匙前先扫</div></div>
+      <h3 class="noprint">${t("carQrs")}</h3><p class="muted noprint">${t("qrHint")}</p>
       <div class="qrgrid">${cars.map(c=>`<div class="qr"><div id="qr-${esc(c.id)}"></div>${esc(c.id)}<div class="muted" style="font-weight:400">${esc(c.model)}</div></div>`).join("")}</div>`;
   }
   $("#app").innerHTML=`<div class="noprint"><div class="stats"><div class="stat"><b>${n("In")}</b><span>${t("statusIn")}</span></div><div class="stat"><b>${n("Out")}</b><span>${t("statusOut")}</span></div>
@@ -488,6 +503,7 @@ function renderAdmin(){
   A.querySelectorAll("[data-reset]").forEach(b=>b.onclick=async()=>{try{await api("adminResetPin",{name:b.dataset.reset});viewAdmin()}catch(e){alertBox(e.message)}});
   A.querySelectorAll("[data-tog]").forEach(b=>b.onclick=async()=>{const s=d.staff.find(x=>x.name===b.dataset.tog);
     try{await api("saveStaff",{name:s.name,email:s.email,role:s.role,active:!s.active});viewAdmin()}catch(e){alertBox(e.message)}});
+  if(ADM.tab==="qr"&&window.QRCode)new QRCode(document.getElementById("qr-desk"),{text:location.origin+location.pathname,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});
   if(ADM.tab==="qr"&&window.QRCode)cars.forEach(c=>new QRCode(document.getElementById("qr-"+c.id),{text:carUrl(c.id),width:120,height:120,correctLevel:QRCode.CorrectLevel.M}));
 }
 function alertBox(msg){$("#modal").innerHTML=`<div class="modal"><div><div class="err">${esc(msg)}</div><button class="btn sec" onclick="$('#modal').innerHTML=''">${t("close")}</button></div></div>`}
