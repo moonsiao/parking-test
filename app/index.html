@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f4f5f7;color:#222;font-size:16px}
 header{background:#1d2b53;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
-header b{font-size:17px}header span{font-size:13px;opacity:.85}
+header b{font-size:16px;white-space:nowrap}@media(max-width:380px){header b{font-size:14px}}header span{font-size:13px;opacity:.85}
 main{max-width:760px;margin:0 auto;padding:14px}
 .card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:0 0 8px}
@@ -48,7 +48,7 @@ tr.click{cursor:pointer}tr.click:hover{background:#f7f8fa}
 </style>
 </head>
 <body>
-<header><b id="title">Parking &amp; Key Tracker</b><span><span id="who"></span> <button class="lang" id="lang">中文</button></span></header>
+<header><span style="display:flex;align-items:center;gap:8px"><a id="homeBtn" href="./" aria-label="Home" title="Home" style="color:#fff;text-decoration:none;font-size:22px;line-height:1">🏠</a><b id="title">Parking &amp; Key Tracker</b></span><span><span id="who"></span> <button class="lang" id="lang">中文</button></span></header>
 <main id="app"><div class="card">Loading…</div></main>
 <div id="modal"></div>
 
@@ -218,6 +218,7 @@ function since(iso){if(!iso)return"";const m=Math.round((Date.now()-new Date(iso
 function showErr(el,e){el.innerHTML=`<div class="err">${esc(e.message||e)}</div>`}
 function busy(btn,on,txt){if(!btn)return;btn.disabled=on;if(txt)btn.textContent=txt}
 function setChrome(){document.documentElement.lang=LANG==="zh"?"zh":"en";document.title=t("title");$("#title").textContent=t("title");$("#lang").textContent=LANG==="zh"?"EN":"中文"}
+$("#homeBtn").onclick=e=>{e.preventDefault();location.href=location.pathname};
 $("#lang").onclick=()=>{LANG=LANG==="zh"?"en":"zh";store.set("lang",LANG);setChrome();
   if(CURRENT_REDRAW)CURRENT_REDRAW();else route()};
 let CURRENT_REDRAW=null;
