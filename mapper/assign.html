@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Car Spots · 车位分配</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;color:#222}
+#wrap{display:flex;height:100%}
+#side{width:360px;overflow:auto;background:#f4f5f7;border-right:1px solid #ddd;padding:12px;display:flex;flex-direction:column}
+#map{flex:1}
+h1{font-size:17px;margin:0}
+.nav{display:flex;gap:6px;margin:8px 0 10px}.nav a{flex:1;text-align:center;padding:7px;border-radius:6px;border:1px solid #1d2b53;color:#1d2b53;text-decoration:none;font-size:13px}.nav a.on{background:#1d2b53;color:#fff}
+.muted{color:#777;font-size:12px}.err{color:#c62828}.ok{color:#0a7d32}
+.card{background:#fff;border-radius:8px;padding:10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+button{padding:7px 10px;border:1px solid #1d2b53;background:#fff;color:#1d2b53;border-radius:6px;cursor:pointer;font-size:13px}
+button.pri{background:#1d2b53;color:#fff}button.red{border-color:#c62828;color:#c62828}
+input{padding:7px;border:1px solid #ccc;border-radius:6px;font-size:13px;width:100%}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+#cars{flex:1;overflow:auto}
+.car{padding:7px 8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:2px solid transparent}
+.car:hover{background:#eef1f6}.car.on{border-color:#1d2b53;background:#e8ecf7}
+.tag{font-size:11px;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.t-in{background:#e3f4e8;color:#0a7d32}.t-out{background:#fff3cd;color:#8a5a00}.t-none{background:#fdecea;color:#c62828}
+.spot{min-width:30px;height:24px;margin:-12px 0 0 -15px;padding:0 4px;border-radius:12px;border:2px solid #fff;color:#fff;font:700 10px/20px system-ui;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.6);cursor:pointer;white-space:nowrap;display:inline-block}
+#bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:#1d2b53;color:#fff;padding:8px 14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:14px;display:none}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="side">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h1>Car Spots · 车位分配</h1><a href="../app/" title="Home 首页" style="font-size:22px;text-decoration:none">🏠</a></div>
+  <div class="nav"><a href="./">🗺️ Map editor 地图编辑</a><a href="assign.html" class="on">🚗 Car spots 车位分配</a></div>
+  <div id="loginBox" class="card">
+    <b>Admin login · 登录</b>
+    <div class="row"><input id="lname" placeholder="Nickname 小名"><input id="lpin" type="password" inputmode="numeric" placeholder="PIN"></div>
+    <div class="row"><button class="pri" id="login">Log in</button><span id="lmsg" class="muted"></span></div>
+  </div>
+  <div id="main" style="display:none;flex:1;display:none;flex-direction:column;min-height:0">
+    <div class="card">
+      <b>How · 怎么用</b>
+      <div class="muted">1. Pick a car on the left. 左边选一辆车。<br>2. Click a spot on the map. 点地图上的车位。<br>Click a blue spot to see / clear the car there. 点蓝色车位可以查看或清掉。</div>
+      <div id="msg" class="muted" style="margin-top:6px"></div>
+    </div>
+    <div class="row" style="margin:0 0 6px"><input id="q" placeholder="Search plate / model 搜车牌、车型"><button id="refresh">↻</button></div>
+    <div class="row" style="margin:0 0 8px" id="filters"></div>
+    <div id="cars" class="card"></div>
+    <label class="muted"><input type="checkbox" id="showOv" checked style="width:auto"> Show photo overlay 显示照片</label>
+  </div>
+</div>
+<div id="map"></div>
+<div id="bar"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const API_URL="https://script.google.com/macros/s/AKfycbwHobvZdNQh303p-iw-XChL1pp4qPqaXXYwEARBpjLrYi-lq77j4VreiKAgRp6cbssX5A/exec";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+async function api(action,data={}){
+  const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(Object.assign({action,token:store.get("mapToken")},data))}).then(x=>x.json());
+  if(!r.ok)throw new Error(r.error);return r;
+}
+const ERR={E_PIN:"Wrong PIN",E_NO_STAFF:"No such staff",E_ADMIN:"Admins only",E_LOGIN:"Please log in again"};
+const errText=e=>ERR[String(e.message).split("|")[0]]||e.message;
+
+let CFG={ZONES:{},SPOTS:{}},CARS=[],sel=null,filter="all";
+const map=L.map("map",{maxZoom:22}).setView([5.9091,116.0507],19);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:22,maxNativeZoom:19,attribution:"Imagery © Esri, Maxar, Earthstar Geographics"}).addTo(map);
+let OV=null;try{OV=JSON.parse(localStorage.getItem("mapperOverlay_v1"))}catch(e){}
+if(!OV)OV={src:"overlay.jpg?v=1",op:0.6,b:[[5.9085301,116.0498175],[5.9098087,116.0515729]]};
+const ovLayer=L.imageOverlay(OV.src,OV.b,{opacity:Math.max(.5,OV.op),interactive:false}).addTo(map);
+const layer=L.layerGroup().addTo(map);
+map.on("zoomend",draw);
+
+function bar(t){$("#bar").style.display=t?"block":"none";$("#bar").innerHTML=t||""}
+function msg(html){$("#msg").innerHTML=html}
+function occupied(){const o={};CARS.forEach(c=>{if(c.status==="In"&&c.spot)o[c.spot]=c});return o}
+
+function draw(){
+  layer.clearLayers();const occ=occupied(),big=map.getZoom()>=20;
+  Object.entries(CFG.ZONES).forEach(([z,poly])=>{
+    if(poly.length>=3)L.polygon(poly,{color:"#ffeb3b",weight:2,fillOpacity:.04,interactive:false}).addTo(layer)
+      .bindTooltip(z,{permanent:true,direction:"center",className:""});
+    (CFG.SPOTS[z]||[]).forEach(row=>Object.entries(row.spots).forEach(([id,p])=>{
+      const c=occ[id],mine=sel&&c&&c.id===sel;
+      const bg=mine?"#0a7d32":c?"#1d6fd1":"#78909c";
+      const label=big?(c?`${esc(id)} · ${esc(c.id)}`:esc(id)):(c?esc(c.id):"");
+      const html=big||c?`<div class="spot" style="background:${bg}">${label}</div>`:`<div style="width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;border:1.5px solid #fff;background:${bg}"></div>`;
+      const m=L.marker(p,{icon:L.divIcon({className:"",html,iconSize:[0,0]}),zIndexOffset:c?500:0}).addTo(layer);
+      m.bindTooltip(c?`${id}: ${c.id} (${c.model||""})`:id+" — empty 空",{direction:"top",offset:[0,-10]});
+      m.on("click",()=>clickSpot(z,id,c,m));
+    }));
+  });
+}
+
+function drawCars(){
+  const q=($("#q").value||"").toUpperCase();
+  const list=CARS.filter(c=>(filter==="all"||(filter==="nospot"&&c.status==="In"&&!c.spot)||(filter==="in"&&c.status==="In"&&c.spot)||(filter==="out"&&c.status!=="In"))&&(!q||(c.id+" "+c.model).toUpperCase().includes(q)))
+    .sort((a,b)=>(a.status==="In"&&!a.spot?0:1)-(b.status==="In"&&!b.spot?0:1)||a.id.localeCompare(b.id));
+  $("#cars").innerHTML=list.map(c=>`<div class="car ${c.id===sel?"on":""}" data-id="${esc(c.id)}"><div><b>${esc(c.id)}</b> <span class="muted">${esc(c.model)}</span></div>
+    ${c.status!=="In"?`<span class="tag t-out">🔑 ${esc(c.holder)}</span>`:c.spot?`<span class="tag t-in">${esc(c.spot)}</span>`:`<span class="tag t-none">no spot 没车位</span>`}</div>`).join("")||'<div class="muted">No cars</div>';
+  document.querySelectorAll(".car").forEach(e=>e.onclick=()=>{sel=sel===e.dataset.id?null:e.dataset.id;drawCars();draw();
+    const c=CARS.find(x=>x.id===sel);
+    if(sel){bar(`Now click a spot for <b>${esc(sel)}</b> 点车位给 ${esc(sel)}`);if(c&&c.spot)focusSpot(c.spot)}else bar(null)});
+  const n=k=>CARS.filter(c=>k==="nospot"?c.status==="In"&&!c.spot:k==="in"?c.status==="In"&&c.spot:k==="out"?c.status!=="In":true).length;
+  $("#filters").innerHTML=[["all","All 全部"],["nospot","No spot 没车位"],["in","Parked 已停"],["out","Out 借出"]].map(([k,t])=>`<button class="${filter===k?"pri":""}" data-f="${k}">${t} (${n(k)})</button>`).join("");
+  document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{filter=b.dataset.f;drawCars()});
+}
+function focusSpot(id){for(const [z,rows] of Object.entries(CFG.SPOTS))for(const r of rows)if(r.spots[id]){map.setView(r.spots[id],Math.max(map.getZoom(),20));return}}
+
+async function clickSpot(z,id,occCar,m){
+  if(sel){
+    const c=CARS.find(x=>x.id===sel);
+    if(occCar&&occCar.id===sel){bar(null);return}
+    let warn="";
+    if(occCar)warn+=`<div class="err">${esc(id)} has <b>${esc(occCar.id)}</b>. It will be cleared. ${esc(id)} 现在有 ${esc(occCar.id)}，会被清掉。</div>`;
+    if(c&&c.status!=="In")warn+=`<div class="err">${esc(c.id)} is borrowed by ${esc(c.holder)}. This will mark it returned. 这辆车借出中，会被当作已归还。</div>`;
+    m.bindPopup(`<div style="min-width:220px"><b>${esc(sel)} → ${esc(id)}</b>${warn}<div class="row"><button class="pri" id="ok">Confirm 确认</button><button id="no">Cancel</button></div></div>`).openPopup();
+    setTimeout(()=>{const el=m.getPopup().getElement(),q=x=>el.querySelector(x);q("#no").onclick=()=>map.closePopup();q("#ok").onclick=async()=>{
+      q("#ok").disabled=true;
+      try{const r=await api("adminSetSpot",{carId:sel,zone:z,spot:id,force:true});map.closePopup();msg(`<span class="ok">✓ ${esc(sel)} → ${esc(id)}</span>`);sel=null;bar(null);await load()}
+      catch(e){msg(`<span class="err">${esc(errText(e))}</span>`);map.closePopup()}}},0);
+  }else if(occCar){
+    m.bindPopup(`<div style="min-width:200px"><b>${esc(id)}</b>: ${esc(occCar.id)} <span class="muted">${esc(occCar.model)}</span><div class="muted">${esc(occCar.updated||"")}</div>
+      <div class="row"><button class="pri" id="mv">Move 移动</button><button class="red" id="clr">Clear 清掉</button></div></div>`).openPopup();
+    setTimeout(()=>{const el=m.getPopup().getElement(),q=x=>el.querySelector(x);q("#mv").onclick=()=>{map.closePopup();sel=occCar.id;drawCars();draw();bar(`Now click the new spot for <b>${esc(sel)}</b> 点新车位`)};
+      q("#clr").onclick=async()=>{try{await api("adminSetSpot",{carId:occCar.id,spot:""});map.closePopup();msg(`<span class="ok">✓ ${esc(id)} cleared 已清掉</span>`);await load()}catch(e){msg(`<span class="err">${esc(errText(e))}</span>`)}}},0);
+  }else{bar("Pick a car on the left first 先在左边选一辆车");setTimeout(()=>{if(!sel)bar(null)},2000)}
+}
+
+async function load(){
+  const [cfg,lst]=await Promise.all([api("getConfig"),api("list")]);
+  if(cfg.config&&cfg.config.ZONES)CFG=cfg.config;
+  CARS=lst.cars;drawCars();draw();
+}
+async function start(){
+  try{await load();$("#loginBox").style.display="none";$("#main").style.display="flex";
+    const pts=[].concat(...Object.values(CFG.ZONES).filter(p=>p.length>=3));if(pts.length)map.fitBounds(pts,{maxZoom:19})}
+  catch(e){store.set("mapToken",null);$("#loginBox").style.display="block";$("#main").style.display="none";if(!/E_LOGIN/.test(e.message))$("#lmsg").textContent=errText(e)}
+}
+$("#login").onclick=async()=>{$("#lmsg").textContent="…";
+  try{const r=await api("login",{name:$("#lname").value.trim(),pin:$("#lpin").value});if(r.role!=="admin")throw new Error("E_ADMIN");store.set("mapToken",r.token);$("#lmsg").textContent="";start()}
+  catch(e){$("#lmsg").innerHTML=`<span class="err">${esc(errText(e))}</span>`}};
+$("#q").oninput=drawCars;$("#refresh").onclick=()=>load().catch(e=>msg(`<span class="err">${esc(errText(e))}</span>`));
+$("#showOv").onchange=e=>{e.target.checked?ovLayer.addTo(map):map.removeLayer(ovLayer)};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){sel=null;bar(null);drawCars();draw()}});
+if(store.get("mapToken"))start();
+</script>
+</body>
+</html>
