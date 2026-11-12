@@ -200,7 +200,7 @@ function t(k,...a){let s=k.split(".").reduce((o,p)=>o&&o[p],L());if(s==null)s=k;
 function errText(code){const[c,p]=String(code).split("|");return L().err[c]?t("err."+c,p):code}
 function stText(s){return s==="In"?t("statusIn"):s==="Out"?t("statusOut"):s==="Loaned"?t("statusLoaned"):s}
 function rsText(r){return L().reasons[r]||r}
-let ME=null;
+let ME=null,CFG_LOADED=false;
 
 async function api(action,data={}){
   const body=JSON.stringify(Object.assign({action,token:store.get("token")},data));
@@ -228,6 +228,7 @@ async function route(){
   $("#modal").innerHTML="";
   if(!store.get("token"))return viewLogin();
   if(!ME){try{const r=await api("me");ME=r}catch(e){return viewLogin(e)}}
+  if(!CFG_LOADED){try{const r=await api("getConfig");if(r.config&&r.config.ZONES){CONFIG.ZONES=r.config.ZONES;CONFIG.SPOTS=r.config.SPOTS||{};CONFIG.OUTSIDE=r.config.OUTSIDE||{}}}catch(e){}CFG_LOADED=true}
   $("#who").textContent=ME.name+(ME.role==="admin"?" · admin":"");
   const car=params().get("car");
   if(car)return viewCar(car);
