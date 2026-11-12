@@ -158,12 +158,13 @@ function setMode(m){
 function msg(m){$("#modeBox").insertAdjacentHTML("beforeend",`<div class="err">${esc(m)}</div>`)}
 function drawTmp(){tmpLayer.clearLayers();if(mode==="zone"&&tmp.length)L.polyline(tmp.concat(tmp.length>2?[tmp[0]]:[]),{color:"#ffeb3b",dashArray:"4 4"}).addTo(tmpLayer);
   tmp.forEach(p=>L.circleMarker(p,{radius:5,color:"#ffeb3b",fillOpacity:1}).addTo(tmpLayer))}
-function nextNumber(z){let max=0;(D.SPOTS[z]||[]).forEach(r=>Object.keys(r.spots).forEach(id=>{const n=parseInt(id.slice(z.length));if(n>max)max=n}));return max+1}
+function sep(z){return /\d$/.test(z)?"-":""}
+function nextNumber(z){let max=0;(D.SPOTS[z]||[]).forEach(r=>Object.keys(r.spots).forEach(id=>{const n=parseInt(id.slice(z.length).replace(/^-/,""));if(n>max)max=n}));return max+1}
 
 map.on("click",e=>{
   const p=[e.latlng.lat,e.latlng.lng];
   if(mode==="zone"){tmp.push(p);drawTmp();return}
-  if(mode==="one"){const id=cur+nextNumber(cur);const rows=(D.SPOTS[cur]=D.SPOTS[cur]||[]);
+  if(mode==="one"){const id=cur+sep(cur)+nextNumber(cur);const rows=(D.SPOTS[cur]=D.SPOTS[cur]||[]);
     let row=rows.find(r=>r.label==="Extra");if(!row){row={label:"Extra",spots:{}};rows.push(row)}
     row.spots[id]=[r8(p[0]),r8(p[1])];setMode(null);setDirty(true);draw();return}
   if(mode==="row"){
@@ -175,7 +176,7 @@ map.on("click",e=>{
         <div class="row"><button id="ok" class="pri">Create 建立</button><button id="cancel">Cancel</button></div>`;
       $("#cancel").onclick=()=>setMode(null);
       $("#ok").onclick=()=>{const cnt=Math.max(1,parseInt($("#cnt").value)||1),st=Math.max(1,parseInt($("#st").value)||1),[a,b]=tmp,spots={};
-        for(let i=0;i<cnt;i++){const f=cnt===1?0:i/(cnt-1);spots[cur+(st+i)]=[r8(a[0]+(b[0]-a[0])*f),r8(a[1]+(b[1]-a[1])*f)]}
+        for(let i=0;i<cnt;i++){const f=cnt===1?0:i/(cnt-1);spots[cur+sep(cur)+(st+i)]=[r8(a[0]+(b[0]-a[0])*f),r8(a[1]+(b[1]-a[1])*f)]}
         const ex=allSpotIds(),dup=Object.keys(spots).find(id=>ex.has(id));
         if(dup)return msg("Spot "+dup+" already exists 号码重复");
         (D.SPOTS[cur]=D.SPOTS[cur]||[]).push({label:$("#rl").value.trim()||("Row "+(D.SPOTS[cur].length+1)),spots});
