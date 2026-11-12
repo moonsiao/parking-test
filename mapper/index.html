@@ -241,6 +241,8 @@ $("#ovLock").onclick=()=>{ovLocked=!ovLocked;ovDraw()};
 $("#ovHide").onclick=()=>{ovHidden=!ovHidden;ovDraw()};
 $("#ovDel").onclick=()=>{OV=null;try{localStorage.removeItem(OVK)}catch(e){}ovDraw()};
 try{OV=JSON.parse(localStorage.getItem(OVK))}catch(e){}
+// Default overlay: Google Maps screenshot of the whole lot, aligned by the showroom roof corners
+if(!OV)OV={src:"overlay.jpg?v=1",op:0.6,b:[[5.9085301,116.0498175],[5.9098087,116.0515729]]};
 
 async function start(){
   try{const r=await api("getConfig");if(r.config&&r.config.ZONES)D=Object.assign({OUTSIDE:{}},r.config);
