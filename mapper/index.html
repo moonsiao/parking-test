@@ -3,128 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Parking Mapper · 车位画图工具</title>
+<title>Mapping Admin · 车位地图管理</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;color:#222}
 #wrap{display:flex;height:100%}
-#side{width:340px;overflow:auto;background:#f4f5f7;border-right:1px solid #ddd;padding:12px}
+#side{width:350px;overflow:auto;background:#f4f5f7;border-right:1px solid #ddd;padding:12px}
 #map{flex:1}
 h1{font-size:17px;margin:0 0 4px}h3{font-size:14px;margin:14px 0 6px}
 .muted{color:#777;font-size:12px}
 .card{background:#fff;border-radius:8px;padding:10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 button{padding:7px 10px;border:1px solid #1d2b53;background:#fff;color:#1d2b53;border-radius:6px;cursor:pointer;font-size:13px}
-button.pri{background:#1d2b53;color:#fff}button.red{border-color:#c62828;color:#c62828}
+button.pri{background:#1d2b53;color:#fff}button.red{border-color:#c62828;color:#c62828}button.green{background:#0a7d32;border-color:#0a7d32;color:#fff}
 button:disabled{opacity:.4}
 input,select{padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px;width:100%}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .zone{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
 .zone.on{background:#1d2b53;color:#fff}
 .mode{background:#fff3cd;border:1px solid #e8c547;padding:8px;border-radius:6px;margin-top:8px}
+.err{color:#c62828}.ok{color:#0a7d32}
 table{width:100%;border-collapse:collapse;font-size:12px}td{padding:4px;border-bottom:1px solid #eee}
-textarea{width:100%;height:120px;font-family:monospace;font-size:11px}
-.lbl{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000}
+textarea{width:100%;height:90px;font-family:monospace;font-size:11px}
+.spotIcon{width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:2px solid #fff;color:#fff;font:700 9px/22px system-ui;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.6);cursor:grab;white-space:nowrap;overflow:visible}
+.cornerIcon{width:14px;height:14px;margin:-7px 0 0 -7px;background:#ffeb3b;border:2px solid #333;border-radius:3px;cursor:move}
+.lbl{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:13px;text-shadow:0 0 3px #000,0 0 3px #000}
+#bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;padding:6px 10px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:13px;display:none}
 </style>
 </head>
 <body>
 <div id="wrap">
 <div id="side">
-  <h1>Parking Mapper · 车位画图</h1>
-  <div class="muted">Draw zones and rows on the satellite map. 在卫星图上画区和排。</div>
-
-  <h3>1. Zones · 区</h3>
-  <div class="card">
-    <div id="zones"></div>
-    <div class="row"><input id="zname" placeholder="New zone name 新区名 (e.g. B, C1, E)" style="flex:1"><button id="addZone">+ Add</button></div>
+  <h1>Mapping Admin · 车位地图管理</h1>
+  <div id="loginBox" class="card">
+    <b>Admin login · 登录</b>
+    <div class="row"><input id="lname" placeholder="Nickname 小名"><input id="lpin" type="password" inputmode="numeric" placeholder="PIN"></div>
+    <div class="row"><button class="pri" id="login">Log in</button><span id="lmsg" class="muted"></span></div>
   </div>
-
-  <div id="zoneTools" class="card" style="display:none">
-    <b id="ztitle"></b>
-    <div class="row"><button id="drawZone">Draw corners 画区的角</button><button id="clearZone" class="red">Clear corners</button></div>
-    <div class="row"><button id="addRow" class="pri">+ Add row 加一排</button><button id="delZone" class="red">Delete zone</button></div>
-    <div id="modeBox"></div>
-    <h3>Rows · 排</h3>
-    <table id="rows"></table>
-  </div>
-
-  <h3>3. Export · 导出</h3>
-  <div class="card">
-    <div class="muted">Copy this and send it to Claude. 复制后贴给 Claude。</div>
-    <textarea id="out" readonly></textarea>
-    <div class="row"><button id="copy" class="pri">Copy 复制</button><span id="copyMsg" class="muted"></span></div>
-    <details style="margin-top:8px"><summary class="muted">Import 导入</summary>
-      <textarea id="inp" placeholder="Paste JSON here"></textarea><button id="doImport">Import</button></details>
-  </div>
-  <div class="card muted">
-    <b>How · 怎么用</b><br>
-    1. Add a zone → <b>Draw corners</b>: click the corners in order, then <b>Finish</b>.<br>
-    2. <b>Add row</b>: click the <b>first</b> spot, then the <b>last</b> spot, fill in count + start number.<br>
-    3. Spots are spaced evenly between them. Wrong? Delete the row and redo.<br>
-    先加区 → 点"画区的角"按顺序点每个角 → Finish。再"加一排"：点第一个车位、最后一个车位，填数量和起始号码。
+  <div id="main" style="display:none">
+    <div class="card">
+      <div class="row" style="margin-top:0;justify-content:space-between"><span id="status" class="muted">Loaded</span><button class="green" id="save">💾 Save to system 保存</button></div>
+      <div id="saveMsg" class="muted"></div>
+    </div>
+    <h3>1. Zones · 区</h3>
+    <div class="card">
+      <div id="zones"></div>
+      <div class="row"><input id="zname" placeholder="New zone 新区名 (B, C1, E…)" style="flex:1"><button id="addZone">+ Add</button></div>
+    </div>
+    <div id="zoneTools" class="card" style="display:none">
+      <b id="ztitle"></b>
+      <div class="row"><button id="drawZone">Redraw corners 重画角落</button><button id="addRow" class="pri">+ Add row 加一排</button></div>
+      <div class="row"><button id="addOne">+ Add one spot 加一个车位</button><button id="delZone" class="red">Delete zone</button></div>
+      <div id="modeBox"></div>
+      <h3>Rows · 排</h3>
+      <table id="rows"></table>
+    </div>
+    <div class="card muted">
+      <b>Tips · 提示</b><br>
+      • <b>Drag</b> any spot (circle) or yellow corner to move it. 拖动圆点或黄色角落即可移动。<br>
+      • <b>Click</b> a spot to rename or delete it. 点车位可以改号码或删除。<br>
+      • Changes are not live until you press <b>Save</b>. 按 <b>Save</b> 才会生效。
+    </div>
+    <details class="card"><summary class="muted">Backup · 备份 (export / import)</summary>
+      <textarea id="out" readonly></textarea>
+      <textarea id="inp" placeholder="Paste JSON to import"></textarea><button id="doImport">Import</button>
+    </details>
   </div>
 </div>
 <div id="map"></div>
+<div id="bar"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-const KEY="parkingMapper_v1";
-// Starting data: zone A from the live system
-let D={ZONES:{A:[[5.909240,116.049955],[5.909181,116.050226],[5.908949,116.050164],[5.909002,116.049893]]},
-  SPOTS:{A:[
-    {label:"left",spots:{A1:[5.90901474,116.04993595],A2:[5.90904409,116.04993595],A3:[5.90906410,116.04994333],A4:[5.90908544,116.04994534],A5:[5.90910812,116.04994937]}},
-    {label:"middle",spots:{A6:[5.90904009,116.05002715],A7:[5.90906210,116.05002983],A8:[5.90908344,116.05003453],A9:[5.90910745,116.05003989],A10:[5.90912613,116.05004525],A11:[5.90914881,116.05004794],A12:[5.90916948,116.05005598]}},
-    {label:"right",spots:{A13:[5.90903008,116.05006738],A14:[5.90904876,116.05007275],A15:[5.90907344,116.05007476],A16:[5.90909678,116.05008213],A17:[5.90911546,116.05008415],A18:[5.90914214,116.05009018],A19:[5.90916148,116.05010024]}}]},
-  OUTSIDE:{}};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.ZONES)D=Object.assign({OUTSIDE:{}},s)}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}draw()};
+const API_URL="https://script.google.com/macros/s/AKfycbwHobvZdNQh303p-iw-XChL1pp4qPqaXXYwEARBpjLrYi-lq77j4VreiKAgRp6cbssX5A/exec";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const r6=n=>Math.round(n*1e8)/1e8;
+const r8=n=>Math.round(n*1e8)/1e8;
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+async function api(action,data={}){
+  const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(Object.assign({action,token:store.get("mapToken")},data))}).then(x=>x.json());
+  if(!r.ok)throw new Error(r.error);return r;
+}
 
-const map=L.map("map",{maxZoom:21}).setView([5.9092,116.0507],19);
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:21,maxNativeZoom:19,attribution:"Imagery © Esri, Maxar, Earthstar Geographics"}).addTo(map);
-const layer=L.layerGroup().addTo(map);
-let cur=null,mode=null,tmp=[],tmpLayer=L.layerGroup().addTo(map);
+let D={ZONES:{},SPOTS:{},OUTSIDE:{}},cur=null,mode=null,tmp=[],dirty=false;
+const COLORS=["#2979ff","#00bfa5","#ff6d00","#d500f9","#c51162","#2e7d32","#6d4c41","#455a64"];
+const map=L.map("map",{maxZoom:22}).setView([5.9092,116.0507],19);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:22,maxNativeZoom:19,attribution:"Imagery © Esri, Maxar, Earthstar Geographics"}).addTo(map);
+const layer=L.layerGroup().addTo(map),tmpLayer=L.layerGroup().addTo(map);
+
+function setDirty(v){dirty=v;$("#status").innerHTML=v?'<span class="err">● Unsaved changes 未保存</span>':'<span class="ok">✓ Saved 已保存</span>';$("#out").value=JSON.stringify(D)}
+window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
+function zoneColor(z){return COLORS[Object.keys(D.ZONES).indexOf(z)%COLORS.length]}
+function allSpotIds(){const s=new Set();Object.values(D.SPOTS).forEach(rows=>rows.forEach(r=>Object.keys(r.spots).forEach(id=>s.add(id))));return s}
 
 function draw(){
   layer.clearLayers();
   Object.entries(D.ZONES).forEach(([z,poly])=>{
-    if(poly.length>=3)L.polygon(poly,{color:z===cur?"#ffeb3b":"#ff5252",weight:z===cur?3:2,fillOpacity:.08}).addTo(layer)
-      .bindTooltip(z+(D.OUTSIDE[z]?" (outside)":""),{permanent:true,direction:"center",className:"lbl"});
-    (D.SPOTS[z]||[]).forEach(row=>Object.entries(row.spots).forEach(([id,p])=>{
-      L.circleMarker(p,{radius:6,color:"#fff",weight:1.5,fillColor:z===cur?"#2979ff":"#90a4ae",fillOpacity:.95}).addTo(layer)
-        .bindTooltip(id,{permanent:map.getZoom()>=20,direction:"top",offset:[0,-4],className:"lbl"});
+    const col=zoneColor(z);
+    if(poly.length>=3){
+      L.polygon(poly,{color:z===cur?"#ffeb3b":col,weight:z===cur?3:2,fillOpacity:.06,interactive:false}).addTo(layer);
+      const c=L.polygon(poly).getBounds().getCenter();
+      L.marker(c,{interactive:false,icon:L.divIcon({className:"lbl",html:esc(z)+(D.OUTSIDE[z]?" (out)":""),iconSize:[80,20]})}).addTo(layer);
+    }
+    if(z===cur&&mode!=="zone")poly.forEach((p,i)=>{
+      const m=L.marker(p,{draggable:true,icon:L.divIcon({className:"",html:'<div class="cornerIcon"></div>',iconSize:[0,0]})}).addTo(layer);
+      m.on("dragend",e=>{const ll=e.target.getLatLng();poly[i]=[r8(ll.lat),r8(ll.lng)];setDirty(true);draw()});
+    });
+    (D.SPOTS[z]||[]).forEach((row,ri)=>Object.entries(row.spots).forEach(([id,p])=>{
+      const m=L.marker(p,{draggable:true,icon:L.divIcon({className:"",html:`<div class="spotIcon" style="background:${z===cur?col:"#78909c"}">${esc(id)}</div>`,iconSize:[0,0]})}).addTo(layer);
+      m.on("dragend",e=>{const ll=e.target.getLatLng();row.spots[id]=[r8(ll.lat),r8(ll.lng)];setDirty(true)});
+      m.on("click",()=>spotPopup(z,ri,id,m));
     }));
   });
-  // sidebar
   $("#zones").innerHTML=Object.keys(D.ZONES).map(z=>{const n=(D.SPOTS[z]||[]).reduce((a,r)=>a+Object.keys(r.spots).length,0);
-    return `<div class="zone ${z===cur?"on":""}" data-z="${esc(z)}"><span><b>${esc(z)}</b> · ${n} spots${D.OUTSIDE[z]?" · outside":""}</span><span>${D.ZONES[z].length>=3?"✓":"<i>no corners</i>"}</span></div>`}).join("")||'<div class="muted">No zones yet</div>';
-  document.querySelectorAll(".zone").forEach(e=>e.onclick=()=>{cur=e.dataset.z;setMode(null);draw()});
+    return `<div class="zone ${z===cur?"on":""}" data-z="${esc(z)}"><span><b style="color:${z===cur?"#fff":zoneColor(z)}">■</b> <b>${esc(z)}</b> · ${n} spots${D.OUTSIDE[z]?" · outside":""}</span><span>${D.ZONES[z].length>=3?"✓":"<i>no corners</i>"}</span></div>`}).join("")||'<div class="muted">No zones yet</div>';
+  document.querySelectorAll(".zone").forEach(e=>e.onclick=()=>{cur=e.dataset.z;setMode(null);draw();const p=D.ZONES[cur];if(p.length>=3)map.fitBounds(L.polygon(p).getBounds(),{maxZoom:20})});
   $("#zoneTools").style.display=cur?"block":"none";
   if(cur){
     $("#ztitle").innerHTML=`Zone ${esc(cur)} <label style="font-weight:400;margin-left:8px"><input type="checkbox" id="outside" style="width:auto" ${D.OUTSIDE[cur]?"checked":""}> outside fence 围栏外</label>`;
-    $("#outside").onchange=e=>{D.OUTSIDE[cur]=e.target.checked;save()};
+    $("#outside").onchange=e=>{D.OUTSIDE[cur]=e.target.checked;setDirty(true);draw()};
     const rows=D.SPOTS[cur]||[];
-    $("#rows").innerHTML=rows.map((r,i)=>{const ids=Object.keys(r.spots);return `<tr><td><b>${esc(r.label)}</b></td><td>${esc(ids[0])} – ${esc(ids[ids.length-1])} (${ids.length})</td><td><button class="red" data-del="${i}">✕</button></td></tr>`}).join("")||'<tr><td class="muted">No rows yet</td></tr>';
-    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.del,1);save()});
+    $("#rows").innerHTML=rows.map((r,i)=>{const ids=Object.keys(r.spots);return `<tr><td><input value="${esc(r.label)}" data-rl="${i}" style="width:90px"></td><td>${ids.length?esc(ids[0])+" – "+esc(ids[ids.length-1]):"-"} (${ids.length})</td><td><button class="red" data-del="${i}">✕</button></td></tr>`}).join("")||'<tr><td class="muted">No rows yet</td></tr>';
+    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.del,1);setDirty(true);draw()});
+    document.querySelectorAll("[data-rl]").forEach(inp=>inp.onchange=()=>{rows[+inp.dataset.rl].label=inp.value.trim()||rows[+inp.dataset.rl].label;setDirty(true)});
   }
   $("#out").value=JSON.stringify(D);
 }
-map.on("zoomend",draw);
 
-function setMode(m){
-  mode=m;tmp=[];tmpLayer.clearLayers();
-  const box=$("#modeBox");
-  if(m==="zone")box.innerHTML=`<div class="mode">Click the corners of zone <b>${esc(cur)}</b> in order. 按顺序点每个角。<div class="row"><button id="undo">Undo</button><button id="fin" class="pri">Finish</button><button id="cancel">Cancel</button></div></div>`;
-  else if(m==="row")box.innerHTML=`<div class="mode" id="rowBox">Click the <b>first</b> spot of the row. 点这排<b>第一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div></div>`;
-  else box.innerHTML="";
-  if($("#cancel"))$("#cancel").onclick=()=>setMode(null);
-  if($("#undo"))$("#undo").onclick=()=>{tmp.pop();drawTmp()};
-  if($("#fin"))$("#fin").onclick=()=>{if(tmp.length<3)return alertMsg("Need at least 3 corners");D.ZONES[cur]=tmp.map(p=>[r6(p[0]),r6(p[1])]);setMode(null);save()};
+function spotPopup(z,ri,id,m){
+  const row=D.SPOTS[z][ri];
+  const html=`<div style="min-width:170px"><b>${esc(id)}</b><div class="row"><input id="rn" value="${esc(id)}"><button id="rnok" class="pri">Rename</button></div>
+    <div class="row"><button id="rdel" class="red">Delete spot 删除</button></div><div id="pmsg" class="err"></div></div>`;
+  m.bindPopup(html).openPopup();
+  setTimeout(()=>{
+    $("#rnok").onclick=()=>{const n=$("#rn").value.trim().toUpperCase();if(!n||n===id)return;if(allSpotIds().has(n)){$("#pmsg").textContent="Already exists 号码重复";return}
+      const e={};Object.entries(row.spots).forEach(([k,v])=>e[k===id?n:k]=v);row.spots=e;map.closePopup();setDirty(true);draw()};
+    $("#rdel").onclick=()=>{delete row.spots[id];if(!Object.keys(row.spots).length)D.SPOTS[z].splice(ri,1);map.closePopup();setDirty(true);draw()};
+  },0);
 }
-function alertMsg(m){$("#modeBox").insertAdjacentHTML("beforeend",`<div class="muted" style="color:#c62828">${esc(m)}</div>`)}
+
+function bar(html){$("#bar").style.display=html?"block":"none";$("#bar").innerHTML=html||""}
+function setMode(m){
+  mode=m;tmp=[];tmpLayer.clearLayers();const box=$("#modeBox");bar(null);
+  if(m==="zone"){box.innerHTML=`<div class="mode">Click the corners of zone <b>${esc(cur)}</b> in order. 按顺序点每个角。<div class="row"><button id="undo">Undo</button><button id="fin" class="pri">Finish</button><button id="cancel">Cancel</button></div></div>`;bar("Click corners of zone "+esc(cur))}
+  else if(m==="row"){box.innerHTML=`<div class="mode" id="rowBox">Click the <b>first</b> spot of the row. 点这排<b>第一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div></div>`;bar("Click the FIRST spot of the row")}
+  else if(m==="one"){box.innerHTML=`<div class="mode">Click where the new spot is. 点新车位的位置。<div class="row"><button id="cancel">Cancel</button></div></div>`;bar("Click the new spot")}
+  else box.innerHTML="";
+  if($("#cancel"))$("#cancel").onclick=()=>{setMode(null);draw()};
+  if($("#undo"))$("#undo").onclick=()=>{tmp.pop();drawTmp()};
+  if($("#fin"))$("#fin").onclick=()=>{if(tmp.length<3)return msg("Need at least 3 corners");D.ZONES[cur]=tmp.map(p=>[r8(p[0]),r8(p[1])]);setMode(null);setDirty(true);draw()};
+  draw();
+}
+function msg(m){$("#modeBox").insertAdjacentHTML("beforeend",`<div class="err">${esc(m)}</div>`)}
 function drawTmp(){tmpLayer.clearLayers();if(mode==="zone"&&tmp.length)L.polyline(tmp.concat(tmp.length>2?[tmp[0]]:[]),{color:"#ffeb3b",dashArray:"4 4"}).addTo(tmpLayer);
   tmp.forEach(p=>L.circleMarker(p,{radius:5,color:"#ffeb3b",fillOpacity:1}).addTo(tmpLayer))}
 function nextNumber(z){let max=0;(D.SPOTS[z]||[]).forEach(r=>Object.keys(r.spots).forEach(id=>{const n=parseInt(id.slice(z.length));if(n>max)max=n}));return max+1}
@@ -132,33 +163,57 @@ function nextNumber(z){let max=0;(D.SPOTS[z]||[]).forEach(r=>Object.keys(r.spots
 map.on("click",e=>{
   const p=[e.latlng.lat,e.latlng.lng];
   if(mode==="zone"){tmp.push(p);drawTmp();return}
+  if(mode==="one"){const id=cur+nextNumber(cur);const rows=(D.SPOTS[cur]=D.SPOTS[cur]||[]);
+    let row=rows.find(r=>r.label==="Extra");if(!row){row={label:"Extra",spots:{}};rows.push(row)}
+    row.spots[id]=[r8(p[0]),r8(p[1])];setMode(null);setDirty(true);draw();return}
   if(mode==="row"){
     tmp.push(p);drawTmp();
-    if(tmp.length===1){$("#rowBox").innerHTML=`Now click the <b>last</b> spot of the row. 再点这排<b>最后一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div>`;$("#cancel").onclick=()=>setMode(null)}
-    if(tmp.length===2){L.polyline(tmp,{color:"#2979ff"}).addTo(tmpLayer);const n=nextNumber(cur);
-      $("#rowBox").innerHTML=`<div class="row"><label style="flex:1">Spots in row 车位数<input id="cnt" type="number" min="1" value="8"></label><label style="flex:1">Start no. 起始号码<input id="st" type="number" min="1" value="${n}"></label></div>
+    if(tmp.length===1){$("#rowBox").innerHTML=`Now click the <b>last</b> spot. 再点<b>最后一个</b>车位。<div class="row"><button id="cancel">Cancel</button></div>`;$("#cancel").onclick=()=>setMode(null);bar("Click the LAST spot of the row")}
+    if(tmp.length===2){L.polyline(tmp,{color:"#2979ff"}).addTo(tmpLayer);bar(null);const n=nextNumber(cur);
+      $("#rowBox").innerHTML=`<div class="row"><label style="flex:1">Spots 车位数<input id="cnt" type="number" min="1" value="8"></label><label style="flex:1">Start no. 起始<input id="st" type="number" min="1" value="${n}"></label></div>
         <div class="row"><label style="flex:1">Row name 排名<input id="rl" value="Row ${(D.SPOTS[cur]||[]).length+1}"></label></div>
         <div class="row"><button id="ok" class="pri">Create 建立</button><button id="cancel">Cancel</button></div>`;
       $("#cancel").onclick=()=>setMode(null);
       $("#ok").onclick=()=>{const cnt=Math.max(1,parseInt($("#cnt").value)||1),st=Math.max(1,parseInt($("#st").value)||1),[a,b]=tmp,spots={};
-        for(let i=0;i<cnt;i++){const f=cnt===1?0:i/(cnt-1);spots[cur+(st+i)]=[r6(a[0]+(b[0]-a[0])*f),r6(a[1]+(b[1]-a[1])*f)]}
-        const dup=Object.keys(spots).find(id=>(D.SPOTS[cur]||[]).some(r=>r.spots[id]));
-        if(dup)return alertMsg("Spot "+dup+" already exists. 车位号码重复。");
-        (D.SPOTS[cur]=D.SPOTS[cur]||[]).push({label:$("#rl").value.trim()||("Row "+((D.SPOTS[cur]||[]).length+1)),spots});
-        setMode(null);save()};
+        for(let i=0;i<cnt;i++){const f=cnt===1?0:i/(cnt-1);spots[cur+(st+i)]=[r8(a[0]+(b[0]-a[0])*f),r8(a[1]+(b[1]-a[1])*f)]}
+        const ex=allSpotIds(),dup=Object.keys(spots).find(id=>ex.has(id));
+        if(dup)return msg("Spot "+dup+" already exists 号码重复");
+        (D.SPOTS[cur]=D.SPOTS[cur]||[]).push({label:$("#rl").value.trim()||("Row "+(D.SPOTS[cur].length+1)),spots});
+        setMode(null);setDirty(true);draw()};
     }
   }
 });
 
-$("#addZone").onclick=()=>{const z=$("#zname").value.trim().toUpperCase().replace(/\s+/g,"");if(!z)return;if(!D.ZONES[z]){D.ZONES[z]=[];D.SPOTS[z]=[]}cur=z;$("#zname").value="";save();setMode("zone")};
+$("#addZone").onclick=()=>{const z=$("#zname").value.trim().toUpperCase().replace(/\s+/g,"");if(!z)return;if(!D.ZONES[z]){D.ZONES[z]=[];D.SPOTS[z]=[]}cur=z;$("#zname").value="";setDirty(true);setMode("zone")};
 $("#drawZone").onclick=()=>setMode("zone");
-$("#clearZone").onclick=()=>{D.ZONES[cur]=[];save()};
 $("#addRow").onclick=()=>setMode("row");
+$("#addOne").onclick=()=>setMode("one");
 $("#delZone").onclick=e=>{const b=e.target;if(!b.dataset.c){b.dataset.c=1;b.textContent="Click again to delete";return}
-  delete D.ZONES[cur];delete D.SPOTS[cur];delete D.OUTSIDE[cur];cur=null;setMode(null);save()};
-$("#copy").onclick=async()=>{try{await navigator.clipboard.writeText($("#out").value);$("#copyMsg").textContent="Copied ✓"}catch(e){$("#out").select();$("#copyMsg").textContent="Select and copy manually"}};
-$("#doImport").onclick=()=>{try{const s=JSON.parse($("#inp").value);if(!s.ZONES)throw 0;D=Object.assign({OUTSIDE:{}},s);cur=null;save()}catch(e){alertMsg("Bad JSON")}};
-draw();
+  delete D.ZONES[cur];delete D.SPOTS[cur];delete D.OUTSIDE[cur];cur=null;setDirty(true);setMode(null)};
+$("#doImport").onclick=()=>{try{const s=JSON.parse($("#inp").value);if(!s.ZONES)throw 0;D=Object.assign({OUTSIDE:{}},s);cur=null;setDirty(true);setMode(null)}catch(e){alertBar("Bad JSON")}};
+function alertBar(m){bar(`<span class="err">${esc(m)}</span>`);setTimeout(()=>bar(null),3000)}
+$("#save").onclick=async()=>{$("#save").disabled=true;$("#saveMsg").textContent="Saving…";
+  try{await api("saveConfig",{config:D});setDirty(false);$("#saveMsg").innerHTML='<span class="ok">Saved. Staff phones get the new map next time they open the app. 已保存，员工下次打开就是新地图。</span>'}
+  catch(e){$("#saveMsg").innerHTML=`<span class="err">Save failed: ${esc(e.message)}</span>`}
+  $("#save").disabled=false};
+
+async function start(){
+  try{const r=await api("getConfig");if(r.config&&r.config.ZONES)D=Object.assign({OUTSIDE:{}},r.config);
+    else{/* first time: start from the built-in zone A */D=DEFAULT}
+    $("#loginBox").style.display="none";$("#main").style.display="block";setDirty(false);
+    $("#status").innerHTML=r.updated?`<span class="ok">✓ Loaded (saved ${esc(r.updated)})</span>`:'<span class="muted">Not saved to system yet</span>';draw()}
+  catch(e){store.set("mapToken",null);$("#loginBox").style.display="block";$("#main").style.display="none";if(!/E_LOGIN/.test(e.message))$("#lmsg").textContent=e.message}
+}
+$("#login").onclick=async()=>{$("#lmsg").textContent="…";
+  try{const r=await api("login",{name:$("#lname").value.trim(),pin:$("#lpin").value});if(r.role!=="admin")throw new Error("Admins only");store.set("mapToken",r.token);$("#lmsg").textContent="";start()}
+  catch(e){$("#lmsg").innerHTML=`<span class="err">${esc(e.message==="E_PIN"?"Wrong PIN":e.message==="E_NO_STAFF"?"No such staff":e.message)}</span>`}};
+const DEFAULT={ZONES:{A:[[5.909240,116.049955],[5.909181,116.050226],[5.908949,116.050164],[5.909002,116.049893]]},
+  SPOTS:{A:[
+    {label:"left",spots:{A1:[5.90901474,116.04993595],A2:[5.90904409,116.04993595],A3:[5.90906410,116.04994333],A4:[5.90908544,116.04994534],A5:[5.90910812,116.04994937]}},
+    {label:"middle",spots:{A6:[5.90904009,116.05002715],A7:[5.90906210,116.05002983],A8:[5.90908344,116.05003453],A9:[5.90910745,116.05003989],A10:[5.90912613,116.05004525],A11:[5.90914881,116.05004794],A12:[5.90916948,116.05005598]}},
+    {label:"right",spots:{A13:[5.90903008,116.05006738],A14:[5.90904876,116.05007275],A15:[5.90907344,116.05007476],A16:[5.90909678,116.05008213],A17:[5.90911546,116.05008415],A18:[5.90914214,116.05009018],A19:[5.90916148,116.05010024]}}]},
+  OUTSIDE:{}};
+if(store.get("mapToken"))start();
 </script>
 </body>
 </html>
